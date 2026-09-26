@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: mana-corner-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    networks:
+      - mana-network
+
+  frontend:
+    build:
+      context: ./client
+      args:
+        REACT_APP_API_URL: http://localhost:5000/api
+    container_name: mana-corner-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - mana-network
+
+networks:
+  mana-network:
+    driver: bridge
