@@ -33,6 +33,52 @@ const theme = createTheme({
       fontFamily: "'Playfair Display', serif",
       fontWeight: 600,
     },
+    h3: {
+      fontFamily: "'Playfair Display', serif",
+    },
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        rounded: {
+          borderRadius: 14,
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+          textTransform: 'none',
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)',
+        },
+      },
+    },
   },
 });
 

@@ -3,13 +3,98 @@ const supabase = require('../lib/supabase');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
-const allowedCategories = ['Coffee', 'Tea', 'Snacks', 'Pastries', 'Beverages', 'Desserts'];
 const allowedGstRates = [5, 12, 18, 28];
 const formatMenuItem = item => ({
   ...item,
   _id: item.id,
   price: Number(item.price),
   gstRate: Number(item.gst_rate)
+});
+const formatCategory = category => ({ ...category, _id: category.id });
+
+async function getCategoryNames() {
+  const { data, error } = await supabase.from('mc_categories').select('name');
+  if (error) throw error;
+  return data.map(category => category.name);
+}
+
+router.get('/categories', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('mc_categories')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+    if (error) throw error;
+    res.json(data.map(formatCategory));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/categories', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can add categories' });
+    }
+
+    const { name } = req.body;
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+
+    const { count, error: countError } = await supabase
+      .from('mc_categories')
+      .select('id', { head: true, count: 'exact' });
+    if (countError) throw countError;
+
+    const { data, error } = await supabase
+      .from('mc_categories')
+      .insert({ name: name.trim(), sort_order: (count || 0) + 1 })
+      .select('*')
+      .single();
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'That category already exists' });
+      }
+      throw error;
+    }
+    res.status(201).json(formatCategory(data));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/categories/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can delete categories' });
+    }
+
+    const { data: category, error: fetchError } = await supabase
+      .from('mc_categories')
+      .select('*')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (fetchError) throw fetchError;
+    if (!category) return res.status(404).json({ error: 'Category not found' });
+
+    const { count, error: countError } = await supabase
+      .from('mc_menu_items')
+      .select('id', { head: true, count: 'exact' })
+      .eq('category', category.name)
+      .eq('active', true);
+    if (countError) throw countError;
+    if (count > 0) {
+      return res.status(400).json({ error: 'Move or remove the menu items in this category first' });
+    }
+
+    const { error } = await supabase.from('mc_categories').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'Category deleted' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 router.get('/', async (req, res) => {
@@ -33,8 +118,9 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     const { name, category, price, gstRate = 5, description, image } = req.body;
+    const categoryNames = await getCategoryNames();
     if (typeof name !== 'string' || !name.trim() ||
-        !allowedCategories.includes(category) ||
+        !categoryNames.includes(category) ||
         price === '' || !Number.isFinite(Number(price)) || Number(price) < 0 ||
         !allowedGstRates.includes(Number(gstRate))) {
       return res.status(400).json({ error: 'Valid name, category, price, and GST rate are required' });
@@ -75,7 +161,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
       updates.name = name.trim();
     }
     if (category !== undefined) {
-      if (!allowedCategories.includes(category)) {
+      const categoryNames = await getCategoryNames();
+      if (!categoryNames.includes(category)) {
         return res.status(400).json({ error: 'Invalid category' });
       }
       updates.category = category;

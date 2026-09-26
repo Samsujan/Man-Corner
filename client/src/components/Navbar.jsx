@@ -6,7 +6,6 @@ import {
   Toolbar,
   Typography,
   Box,
-  Button,
   Menu,
   MenuItem,
   Avatar,
@@ -43,8 +42,8 @@ const Navbar = () => {
       <AppBar
         position="sticky"
         sx={{
-          bgcolor: '#6f4e37',
-          boxShadow: '0 2px 8px rgba(111, 78, 55, 0.15)',
+          background: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)',
+          boxShadow: '0 4px 16px rgba(74, 49, 32, 0.25)',
         }}
       >
         <Toolbar>

@@ -20,7 +20,6 @@ const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   useEffect(() => {
     fetchDashboardData();

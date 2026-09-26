@@ -100,7 +100,7 @@ const Sidebar = ({ open, onClose }) => {
         }}
       >
         {/* Header */}
-        <Box sx={{ p: 2, bgcolor: '#6f4e37', color: '#fff' }}>
+        <Box sx={{ p: 2, background: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)', color: '#fff' }}>
           <Typography
             variant="h6"
             sx={{
@@ -169,7 +169,7 @@ const Sidebar = ({ open, onClose }) => {
         {/* Footer Info */}
         <Box sx={{ p: 2, bgcolor: '#f5f3f0', fontSize: '0.8rem', color: '#888' }}>
           <Typography variant="caption">
-            Website: www.manácorner.com
+            Website: www.manàcorner.com
           </Typography>
           <Typography variant="caption" display="block" sx={{ mt: 1 }}>
             © 2026 Maná Corner

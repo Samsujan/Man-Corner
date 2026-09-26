@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useMemo, useState } from 'react';
 import API from '../utils/api';
 import {
   Container,
@@ -25,17 +24,26 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Tabs,
+  Tab,
+  Chip,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SearchIcon from '@mui/icons-material/Search';
 
 const Billing = () => {
-  const { user } = useSelector((state) => state.auth);
   const [menuItems, setMenuItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -56,16 +64,52 @@ const Billing = () => {
     }
   };
 
+  const categories = useMemo(() => {
+    const seen = [];
+    menuItems.forEach((item) => {
+      if (!seen.includes(item.category)) seen.push(item.category);
+    });
+    return ['All', ...seen];
+  }, [menuItems]);
+
+  const visibleItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
+      const matchesSearch = item.name.toLowerCase().includes(search.trim().toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [menuItems, activeCategory, search]);
+
+  const getQuantity = (itemId) =>
+    selectedItems.find((i) => i.menuItem._id === itemId)?.quantity || 0;
+
   const addItemToBill = (item) => {
     const existingItem = selectedItems.find((i) => i.menuItem._id === item._id);
     if (existingItem) {
-      existingItem.quantity += 1;
-      setSelectedItems([...selectedItems]);
+      setSelectedItems(
+        selectedItems.map((i) =>
+          i.menuItem._id === item._id ? { ...i, quantity: i.quantity + 1 } : i
+        )
+      );
     } else {
       setSelectedItems([
         ...selectedItems,
         { menuItem: item, quantity: 1, gstRate: item.gstRate },
       ]);
+    }
+  };
+
+  const decrementItem = (itemId) => {
+    const existingItem = selectedItems.find((i) => i.menuItem._id === itemId);
+    if (!existingItem) return;
+    if (existingItem.quantity <= 1) {
+      removeItemFromBill(itemId);
+    } else {
+      setSelectedItems(
+        selectedItems.map((i) =>
+          i.menuItem._id === itemId ? { ...i, quantity: i.quantity - 1 } : i
+        )
+      );
     }
   };
 
@@ -135,83 +179,177 @@ const Billing = () => {
 
       <Grid container spacing={3}>
         {/* Menu Selection */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ borderRadius: '12px' }}>
+        <Grid item xs={12} md={7}>
+          <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Select Items
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {menuItems.map((item) => (
-                  <Card key={item._id} sx={{ p: 2, bgcolor: '#f5f3f0' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Box>
-                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                          {item.name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#888' }}>
-                          ₹{item.price} (GST: {item.gstRate}%)
-                        </Typography>
-                      </Box>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        sx={{ bgcolor: '#6f4e37' }}
-                        onClick={() => addItemToBill(item)}
-                      >
-                        <AddIcon />
-                      </Button>
-                    </Box>
-                  </Card>
+
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search dishes…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                sx={{ mb: 2 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" sx={{ color: '#a08670' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <Tabs
+                value={activeCategory}
+                onChange={(event, value) => setActiveCategory(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                sx={{
+                  mb: 2,
+                  minHeight: 36,
+                  '& .MuiTab-root': {
+                    minHeight: 36,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '20px',
+                    mr: 1,
+                    color: '#6f4e37',
+                  },
+                  '& .Mui-selected': {
+                    bgcolor: '#6f4e37',
+                    color: '#fff !important',
+                  },
+                  '& .MuiTabs-indicator': { display: 'none' },
+                }}
+              >
+                {categories.map((category) => (
+                  <Tab key={category} value={category} label={category} />
                 ))}
-              </Box>
+              </Tabs>
+
+              <Grid container spacing={1.5}>
+                {visibleItems.map((item) => {
+                  const quantity = getQuantity(item._id);
+                  return (
+                    <Grid item xs={12} sm={6} key={item._id}>
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          p: 1.5,
+                          borderRadius: '12px',
+                          borderColor: quantity > 0 ? '#6f4e37' : '#e8e2da',
+                          bgcolor: quantity > 0 ? '#f8f2ec' : '#fbfaf8',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <Box sx={{ pr: 1 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                              {item.name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#888' }}>
+                              ₹{item.price} · GST {item.gstRate}%
+                            </Typography>
+                          </Box>
+                          {quantity === 0 ? (
+                            <IconButton
+                              size="small"
+                              onClick={() => addItemToBill(item)}
+                              sx={{ bgcolor: '#6f4e37', color: '#fff', '&:hover': { bgcolor: '#4a3120' } }}
+                            >
+                              <AddIcon fontSize="small" />
+                            </IconButton>
+                          ) : (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <IconButton
+                                size="small"
+                                onClick={() => decrementItem(item._id)}
+                                sx={{ bgcolor: '#e8e2da' }}
+                              >
+                                <RemoveIcon fontSize="small" />
+                              </IconButton>
+                              <Typography sx={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>
+                                {quantity}
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                onClick={() => addItemToBill(item)}
+                                sx={{ bgcolor: '#6f4e37', color: '#fff', '&:hover': { bgcolor: '#4a3120' } }}
+                              >
+                                <AddIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          )}
+                        </Box>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+                {visibleItems.length === 0 && (
+                  <Grid item xs={12}>
+                    <Typography sx={{ p: 2, textAlign: 'center', color: '#888' }}>
+                      No dishes match your search.
+                    </Typography>
+                  </Grid>
+                )}
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
 
         {/* Bill Summary */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ borderRadius: '12px', position: 'sticky', top: 100 }}>
+        <Grid item xs={12} md={5}>
+          <Card sx={{ borderRadius: '16px', position: 'sticky', top: 100, boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Bill Summary
               </Typography>
 
-              <TableContainer component={Paper} sx={{ mb: 2 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: '#f5f3f0' }}>
-                      <TableCell>Item</TableCell>
-                      <TableCell align="right">Qty</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="center">Action</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {selectedItems.map((item) => {
-                      const itemTotal = item.menuItem.price * item.quantity;
-                      return (
-                        <TableRow key={item.menuItem._id}>
-                          <TableCell>{item.menuItem.name}</TableCell>
-                          <TableCell align="right">{item.quantity}</TableCell>
-                          <TableCell align="right">₹{itemTotal}</TableCell>
-                          <TableCell align="center">
-                            <Button
-                              size="small"
-                              color="error"
-                              onClick={() => removeItemFromBill(item.menuItem._id)}
-                            >
-                              ✕
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              {selectedItems.length === 0 ? (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">Tap + on a dish to start a bill.</Typography>
+                </Box>
+              ) : (
+                <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 'none', border: '1px solid #eee2d8' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#f5f3f0' }}>
+                        <TableCell>Item</TableCell>
+                        <TableCell align="right">Qty</TableCell>
+                        <TableCell align="right">Total</TableCell>
+                        <TableCell align="center">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selectedItems.map((item) => {
+                        const itemTotal = item.menuItem.price * item.quantity;
+                        return (
+                          <TableRow key={item.menuItem._id}>
+                            <TableCell>{item.menuItem.name}</TableCell>
+                            <TableCell align="right">{item.quantity}</TableCell>
+                            <TableCell align="right">₹{itemTotal.toFixed(2)}</TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => removeItemFromBill(item.menuItem._id)}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
 
-              <Box sx={{ bgcolor: '#f5f3f0', p: 2, borderRadius: '8px', mb: 2 }}>
+              <Box sx={{ bgcolor: '#f5f3f0', p: 2, borderRadius: '12px', mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography>Subtotal:</Typography>
                   <Typography sx={{ fontWeight: 600 }}>
@@ -238,7 +376,7 @@ const Billing = () => {
               <Button
                 fullWidth
                 variant="contained"
-                sx={{ bgcolor: '#6f4e37', py: 1.5 }}
+                sx={{ bgcolor: '#6f4e37', py: 1.5, borderRadius: '10px' }}
                 disabled={selectedItems.length === 0}
                 onClick={() => setOpenDialog(true)}
               >
@@ -250,7 +388,7 @@ const Billing = () => {
       </Grid>
 
       {/* Billing Confirmation Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '16px' } }}>
         <DialogTitle>Confirm Billing</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
@@ -283,7 +421,7 @@ const Billing = () => {
               <Button
                 fullWidth
                 variant="contained"
-                sx={{ bgcolor: '#6f4e37' }}
+                sx={{ bgcolor: '#6f4e37', borderRadius: '10px' }}
                 onClick={handleCreateBill}
               >
                 Create Bill
@@ -298,7 +436,7 @@ const Billing = () => {
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
           Recent Bills
         </Typography>
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ borderRadius: '16px', boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f3f0' }}>
@@ -311,7 +449,7 @@ const Billing = () => {
             </TableHead>
             <TableBody>
               {bills.slice(0, 5).map((bill) => (
-                <TableRow key={bill._id}>
+                <TableRow key={bill._id} hover>
                   <TableCell>
                     <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
                       {bill.billNumber}
@@ -321,23 +459,23 @@ const Billing = () => {
                   <TableCell align="right">₹{bill.total.toFixed(2)}</TableCell>
                   <TableCell>{bill.paymentMethod}</TableCell>
                   <TableCell>
-                    <Box
+                    <Chip
+                      size="small"
+                      label={bill.status}
                       sx={{
-                        display: 'inline-block',
                         bgcolor: '#d4edda',
                         color: '#155724',
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: '4px',
-                        fontSize: '0.8rem',
                         fontWeight: 600,
                       }}
-                    >
-                      {bill.status}
-                    </Box>
+                    />
                   </TableCell>
                 </TableRow>
               ))}
+              {bills.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">No bills created yet.</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>

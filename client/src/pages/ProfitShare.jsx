@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import API from '../utils/api';
 import {
@@ -22,10 +22,6 @@ import {
   DialogTitle,
   DialogContent,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 
@@ -35,22 +31,8 @@ const ProfitShare = () => {
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
-  const [formData, setFormData] = useState({
-    month: new Date().toISOString().substring(0, 7),
-    percentageA: 33.33,
-    percentageB: 33.33,
-    percentageC: 33.34,
-  });
 
-  useEffect(() => {
-    if (user?.role === 'owner') {
-      fetchProfitShare();
-    } else {
-      setLoading(false);
-    }
-  }, [month, user]);
-
-  const fetchProfitShare = async () => {
+  const fetchProfitShare = useCallback(async () => {
     try {
       const response = await API.get(`/analytics/profit-share/${month}`);
       setProfitShare(response.data);
@@ -59,7 +41,15 @@ const ProfitShare = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [month]);
+
+  useEffect(() => {
+    if (user?.role === 'owner') {
+      fetchProfitShare();
+    } else {
+      setLoading(false);
+    }
+  }, [month, user, fetchProfitShare]);
 
   if (user?.role !== 'owner' && !loading) {
     return (
