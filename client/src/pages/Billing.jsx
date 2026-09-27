@@ -34,6 +34,8 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
+import PrintIcon from '@mui/icons-material/Print';
+import { printBillReceipt } from '../utils/printReceipt';
 
 const Billing = () => {
   const [menuItems, setMenuItems] = useState([]);
@@ -143,11 +145,11 @@ const Billing = () => {
         paymentMethod,
       };
 
-      await API.post('/billing', billData);
-      alert('✅ Bill created successfully!');
+      const response = await API.post('/billing', billData);
       setSelectedItems([]);
       setPaymentMethod('Cash');
       setOpenDialog(false);
+      printBillReceipt(response.data);
       fetchData();
     } catch (error) {
       console.error('Failed to create bill:', error);
@@ -445,6 +447,7 @@ const Billing = () => {
                 <TableCell align="right">Amount</TableCell>
                 <TableCell>Payment</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell align="center">Receipt</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -469,11 +472,16 @@ const Billing = () => {
                       }}
                     />
                   </TableCell>
+                  <TableCell align="center">
+                    <IconButton size="small" onClick={() => printBillReceipt(bill)} title="Print bill">
+                      <PrintIcon fontSize="small" sx={{ color: '#6f4e37' }} />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
               {bills.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">No bills created yet.</TableCell>
+                  <TableCell colSpan={6} align="center">No bills created yet.</TableCell>
                 </TableRow>
               )}
             </TableBody>
