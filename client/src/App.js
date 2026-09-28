@@ -10,6 +10,7 @@ import SignUp from './components/SignUp';
 // Pages
 import Dashboard from './pages/Dashboard';
 import Billing from './pages/Billing';
+import Directory from './pages/Directory';
 import Expenses from './pages/Expenses';
 import Analytics from './pages/Analytics';
 import ProfitShare from './pages/ProfitShare';
@@ -41,6 +42,7 @@ function App() {
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/billing" element={<Billing />} />
+          <Route path="/directory" element={<Directory />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/profit-share" element={<ProfitShare />} />

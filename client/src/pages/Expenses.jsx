@@ -25,13 +25,25 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  IconButton,
+  Alert,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import SaveIcon from '@mui/icons-material/Save';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+
+const expenseCategories = ['Inventory', 'Utilities', 'Rent', 'Salaries', 'Maintenance', 'Marketing', 'Other'];
+const emptyFixedCost = { name: '', category: 'Utilities', amount: '' };
 
 const Expenses = () => {
   const { user } = useSelector((state) => state.auth);
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [fixedCosts, setFixedCosts] = useState([]);
+  const [fixedCostDrafts, setFixedCostDrafts] = useState({});
+  const [fixedCostError, setFixedCostError] = useState('');
+  const [openFixedCostDialog, setOpenFixedCostDialog] = useState(false);
+  const [newFixedCost, setNewFixedCost] = useState(emptyFixedCost);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [receipt, setReceipt] = useState(null);
@@ -46,6 +58,7 @@ const Expenses = () => {
   useEffect(() => {
     if (user?.role === 'owner') {
       fetchExpenses();
+      fetchFixedCosts();
     } else {
       setLoading(false);
     }
@@ -63,6 +76,67 @@ const Expenses = () => {
       console.error('Failed to fetch expenses:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFixedCosts = async () => {
+    try {
+      const response = await API.get('/fixed-costs');
+      setFixedCosts(response.data);
+      setFixedCostDrafts(
+        Object.fromEntries(response.data.map((cost) => [cost._id, String(cost.amount ?? '')]))
+      );
+    } catch (error) {
+      console.error('Failed to fetch fixed costs:', error);
+    }
+  };
+
+  const handleFixedCostDraftChange = (id, value) => {
+    setFixedCostDrafts({ ...fixedCostDrafts, [id]: value });
+  };
+
+  const saveFixedCostAmount = async (cost) => {
+    setFixedCostError('');
+    const value = Number(fixedCostDrafts[cost._id]);
+    if (!Number.isFinite(value) || value < 0) {
+      setFixedCostError('Enter a valid non-negative amount');
+      return;
+    }
+    try {
+      await API.put(`/fixed-costs/${cost._id}`, { amount: value });
+      await Promise.all([fetchFixedCosts(), fetchExpenses()]);
+    } catch (error) {
+      setFixedCostError(error.response?.data?.error || 'Could not update fixed cost');
+    }
+  };
+
+  const handleAddFixedCost = async () => {
+    setFixedCostError('');
+    if (!newFixedCost.name.trim() || newFixedCost.amount === '' || Number(newFixedCost.amount) < 0) {
+      setFixedCostError('Provide a name and a valid amount');
+      return;
+    }
+    try {
+      await API.post('/fixed-costs', {
+        name: newFixedCost.name.trim(),
+        category: newFixedCost.category,
+        amount: Number(newFixedCost.amount),
+      });
+      setNewFixedCost(emptyFixedCost);
+      setOpenFixedCostDialog(false);
+      await Promise.all([fetchFixedCosts(), fetchExpenses()]);
+    } catch (error) {
+      setFixedCostError(error.response?.data?.error || 'Could not add fixed cost');
+    }
+  };
+
+  const handleDeleteFixedCost = async (cost) => {
+    if (!window.confirm(`Remove "${cost.name}" from fixed costs? Past expense entries stay untouched.`)) return;
+    try {
+      await API.delete(`/fixed-costs/${cost._id}`);
+      fetchFixedCosts();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Could not remove fixed cost');
     }
   };
 
@@ -144,6 +218,68 @@ const Expenses = () => {
           Add Expense
         </Button>
       </Box>
+
+      {/* Fixed Monthly Costs */}
+      <Card sx={{ borderRadius: '12px', mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              🏷️ Fixed Monthly Costs
+            </Typography>
+            <Button size="small" startIcon={<AddIcon />} onClick={() => setOpenFixedCostDialog(true)}>
+              Add fixed cost
+            </Button>
+          </Box>
+          <Typography variant="body2" sx={{ color: '#888', mb: 2 }}>
+            Salary, rent, power, wifi, and water are fixed line items every month — just keep the amount
+            updated and it's automatically logged as this month's expense.
+          </Typography>
+          {fixedCostError && <Alert severity="error" sx={{ mb: 2 }}>{fixedCostError}</Alert>}
+          <TableContainer component={Paper} sx={{ boxShadow: 'none', border: '1px solid #eee' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f5f3f0' }}>
+                  <TableCell>Item</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell align="right">Amount (₹)</TableCell>
+                  <TableCell align="center">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {fixedCosts.map((cost) => (
+                  <TableRow key={cost._id}>
+                    <TableCell sx={{ fontWeight: 600 }}>{cost.name}</TableCell>
+                    <TableCell>{cost.category}</TableCell>
+                    <TableCell align="right">
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={fixedCostDrafts[cost._id] ?? ''}
+                        onChange={(event) => handleFixedCostDraftChange(cost._id, event.target.value)}
+                        sx={{ width: 120 }}
+                        inputProps={{ min: 0, step: '0.01' }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <IconButton size="small" onClick={() => saveFixedCostAmount(cost)} title="Save amount">
+                        <SaveIcon fontSize="small" sx={{ color: '#6f4e37' }} />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => handleDeleteFixedCost(cost)} title="Remove">
+                        <DeleteOutlineIcon fontSize="small" color="error" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {fixedCosts.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">No fixed costs configured yet.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -337,6 +473,51 @@ const Expenses = () => {
                 disabled={!formData.description || !formData.amount}
               >
                 Add Expense
+              </Button>
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Fixed Cost Dialog */}
+      <Dialog open={openFixedCostDialog} onClose={() => setOpenFixedCostDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Add Fixed Monthly Cost</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {fixedCostError && <Alert severity="error">{fixedCostError}</Alert>}
+            <TextField
+              fullWidth
+              label="Name"
+              value={newFixedCost.name}
+              onChange={(event) => setNewFixedCost({ ...newFixedCost, name: event.target.value })}
+              placeholder="e.g., Internet Backup Plan"
+            />
+            <FormControl fullWidth>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={newFixedCost.category}
+                onChange={(event) => setNewFixedCost({ ...newFixedCost, category: event.target.value })}
+                label="Category"
+              >
+                {expenseCategories.map((category) => (
+                  <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth
+              label="Amount (₹)"
+              type="number"
+              value={newFixedCost.amount}
+              onChange={(event) => setNewFixedCost({ ...newFixedCost, amount: event.target.value })}
+              inputProps={{ min: 0, step: '0.01' }}
+            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button fullWidth variant="outlined" onClick={() => setOpenFixedCostDialog(false)}>
+                Cancel
+              </Button>
+              <Button fullWidth variant="contained" sx={{ bgcolor: '#6f4e37' }} onClick={handleAddFixedCost}>
+                Add
               </Button>
             </Box>
           </Box>

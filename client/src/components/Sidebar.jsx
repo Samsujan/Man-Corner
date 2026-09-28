@@ -20,6 +20,7 @@ import AnalyticsIcon from '@mui/icons-material/Analytics';
 import PaidIcon from '@mui/icons-material/Paid';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import PeopleIcon from '@mui/icons-material/People';
+import ContactsIcon from '@mui/icons-material/Contacts';
 
 const Sidebar = ({ open, onClose }) => {
   const { user } = useSelector((state) => state.auth);
@@ -39,6 +40,12 @@ const Sidebar = ({ open, onClose }) => {
       path: '/billing',
       roles: ['owner', 'guest'],
       badge: '🧾',
+    },
+    {
+      label: 'Directory',
+      icon: <ContactsIcon />,
+      path: '/directory',
+      roles: ['owner', 'guest'],
     },
   ];
 

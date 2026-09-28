@@ -6,7 +6,7 @@ const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 const bucketName = 'mana-corner-receipts';
-const allowedCategories = ['Inventory', 'Utilities', 'Rent', 'Salaries', 'Maintenance', 'Marketing', 'Other'];
+const allowedCategories = require('../constants/expenseCategories');
 const allowedPaymentMethods = ['Cash', 'Card', 'UPI', 'Online'];
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const upload = multer({
