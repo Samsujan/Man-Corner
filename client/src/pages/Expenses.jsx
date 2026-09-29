@@ -31,6 +31,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 
 const expenseCategories = ['Inventory', 'Utilities', 'Rent', 'Salaries', 'Maintenance', 'Marketing', 'Other'];
 const emptyFixedCost = { name: '', category: 'Utilities', amount: '' };
@@ -198,20 +199,53 @@ const Expenses = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography
-          variant="h3"
-          sx={{
-            fontFamily: "'Playfair Display', serif",
-            color: '#6f4e37',
-            fontWeight: 700,
-          }}
-        >
-          💸 Expenses
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          p: { xs: 2.5, sm: 3.5 },
+          flexWrap: 'wrap',
+          gap: 2,
+          borderRadius: 5,
+          background: 'linear-gradient(115deg, rgba(104,70,47,0.09) 0%, rgba(200,154,98,0.14) 100%)',
+          border: '1px solid rgba(104,70,47,0.09)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              placeItems: 'center',
+              width: 58,
+              height: 58,
+              borderRadius: '19px',
+              color: '#68462f',
+              bgcolor: 'rgba(255,253,250,0.8)',
+              boxShadow: '0 7px 18px rgba(57,39,25,0.08)',
+            }}
+          >
+            <ReceiptLongIcon sx={{ fontSize: 29 }} />
+          </Box>
+          <Box>
+            <Typography variant="overline" sx={{ color: '#a17851', fontWeight: 700, letterSpacing: '0.14em' }}>
+              OWNER FINANCE
+            </Typography>
+            <Typography
+              variant="h3"
+              sx={{ fontFamily: "'Playfair Display', serif", color: '#503622', fontWeight: 700, lineHeight: 1.05 }}
+            >
+              Expenses
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#82766a', mt: 0.5 }}>
+              Track spending and recurring monthly costs
+            </Typography>
+          </Box>
+        </Box>
         <Button
           variant="contained"
-          sx={{ bgcolor: '#6f4e37' }}
+          sx={{ bgcolor: '#68462f', px: 2.25, '&:hover': { bgcolor: '#503622' } }}
           startIcon={<AddIcon />}
           onClick={() => setOpenDialog(true)}
         >
@@ -220,11 +254,11 @@ const Expenses = () => {
       </Box>
 
       {/* Fixed Monthly Costs */}
-      <Card sx={{ borderRadius: '12px', mb: 4 }}>
+      <Card sx={{ mb: 4 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              🏷️ Fixed Monthly Costs
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#503622' }}>
+              Fixed Monthly Costs
             </Typography>
             <Button size="small" startIcon={<AddIcon />} onClick={() => setOpenFixedCostDialog(true)}>
               Add fixed cost

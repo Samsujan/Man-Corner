@@ -100,53 +100,85 @@ const Sidebar = ({ open, onClose }) => {
     <Drawer anchor="left" open={open} onClose={onClose}>
       <Box
         sx={{
-          width: 280,
+          width: { xs: 296, sm: 312 },
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          bgcolor: '#fffdfa',
         }}
       >
         {/* Header */}
-        <Box sx={{ p: 2, background: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)', color: '#fff' }}>
+        <Box
+          sx={{
+            p: 2.5,
+            background: 'linear-gradient(135deg, #392719 0%, #68462f 72%, #79583c 100%)',
+            color: '#fff',
+            minHeight: 136,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: '13px',
+              bgcolor: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              mb: 1.5,
+            }}
+          >
+            <RestaurantMenuIcon sx={{ fontSize: 21, color: '#f3d8ad' }} />
+          </Box>
           <Typography
             variant="h6"
             sx={{
               fontFamily: "'Playfair Display', serif",
               fontWeight: 700,
+              lineHeight: 1.1,
             }}
           >
             Maná Corner
           </Typography>
-          <Typography variant="caption" sx={{ opacity: 0.8 }}>
+          <Typography variant="caption" sx={{ opacity: 0.74, fontStyle: 'italic' }}>
             Something to Eat
           </Typography>
-          <Typography variant="caption" display="block" sx={{ opacity: 0.65 }}>
-            {user?.role.toUpperCase()} DASHBOARD
+          <Typography variant="overline" display="block" sx={{ opacity: 0.57, mt: 1.25, lineHeight: 1 }}>
+            {user?.role} workspace
           </Typography>
         </Box>
 
         <Divider />
 
         {/* Navigation Items */}
-        <List sx={{ flex: 1, py: 2 }}>
+        <List sx={{ flex: 1, py: 2, px: 1.25 }}>
           {allItems.map((item) => (
-            <ListItem key={item.path} disablePadding>
+            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 onClick={() => handleNavigation(item.path)}
                 selected={isActive(item.path)}
                 sx={{
-                  bgcolor: isActive(item.path) ? '#f5f3f0' : 'transparent',
-                  borderLeft: isActive(item.path) ? '4px solid #6f4e37' : 'none',
-                  paddingLeft: isActive(item.path) ? '12px' : '16px',
+                  borderRadius: 2.5,
+                  minHeight: 48,
+                  bgcolor: isActive(item.path) ? '#f3ece2' : 'transparent',
+                  borderLeft: isActive(item.path) ? '3px solid #68462f' : '3px solid transparent',
+                  paddingLeft: '13px',
                   '&:hover': {
-                    bgcolor: '#fafaf9',
+                    bgcolor: '#f8f4ee',
+                  },
+                  '&.Mui-selected': {
+                    bgcolor: '#f3ece2',
+                    '&:hover': { bgcolor: '#eee4d8' },
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    color: isActive(item.path) ? '#6f4e37' : 'inherit',
-                    minWidth: 40,
+                    color: isActive(item.path) ? '#68462f' : '#86796d',
+                    minWidth: 42,
                   }}
                 >
                   {item.badge ? (
@@ -162,7 +194,8 @@ const Sidebar = ({ open, onClose }) => {
                   sx={{
                     '& .MuiTypography-root': {
                       fontWeight: isActive(item.path) ? 600 : 500,
-                      color: isActive(item.path) ? '#6f4e37' : 'inherit',
+                      color: isActive(item.path) ? '#503622' : '#51483f',
+                      fontSize: '0.92rem',
                     },
                   }}
                 />
@@ -174,7 +207,7 @@ const Sidebar = ({ open, onClose }) => {
         <Divider />
 
         {/* Footer Info */}
-        <Box sx={{ p: 2, bgcolor: '#f5f3f0', fontSize: '0.8rem', color: '#888' }}>
+        <Box sx={{ p: 2, bgcolor: '#f8f4ee', fontSize: '0.8rem', color: '#887a6e' }}>
           <Typography variant="caption">
             Website: www.manàcorner.com
           </Typography>

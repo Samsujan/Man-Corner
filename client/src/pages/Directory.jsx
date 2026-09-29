@@ -36,6 +36,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CallIcon from '@mui/icons-material/Call';
 import EmailIcon from '@mui/icons-material/Email';
+import ContactsIcon from '@mui/icons-material/Contacts';
 
 const contactTypes = ['Supplier', 'Staff', 'Customer', 'Other'];
 const typeColors = {
@@ -146,20 +147,59 @@ const Directory = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Typography
-          variant="h3"
-          sx={{ fontFamily: "'Playfair Display', serif", color: '#6f4e37', fontWeight: 700 }}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          p: { xs: 2.5, sm: 3.5 },
+          flexWrap: 'wrap',
+          gap: 2,
+          borderRadius: 5,
+          background: 'linear-gradient(115deg, rgba(104,70,47,0.09) 0%, rgba(200,154,98,0.14) 100%)',
+          border: '1px solid rgba(104,70,47,0.09)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              placeItems: 'center',
+              width: 58,
+              height: 58,
+              borderRadius: '19px',
+              color: '#68462f',
+              bgcolor: 'rgba(255,253,250,0.8)',
+              boxShadow: '0 7px 18px rgba(57,39,25,0.08)',
+            }}
+          >
+            <ContactsIcon sx={{ fontSize: 29 }} />
+          </Box>
+          <Box>
+            <Typography variant="overline" sx={{ color: '#a17851', fontWeight: 700, letterSpacing: '0.14em' }}>
+              YOUR CAFE NETWORK
+            </Typography>
+            <Typography
+              variant="h3"
+              sx={{ fontFamily: "'Playfair Display', serif", color: '#503622', fontWeight: 700, lineHeight: 1.05 }}
+            >
+              Directory
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#82766a', mt: 0.5 }}>
+              {contacts.length} {contacts.length === 1 ? 'contact' : 'contacts'} saved
+            </Typography>
+          </Box>
+        </Box>
+        <Button
+          variant="contained"
+          sx={{ bgcolor: '#68462f', px: 2.25, '&:hover': { bgcolor: '#503622' } }}
+          startIcon={<AddIcon />}
+          onClick={openAddDialog}
         >
-          📇 Directory
-        </Typography>
-        <Button variant="contained" sx={{ bgcolor: '#6f4e37' }} startIcon={<AddIcon />} onClick={openAddDialog}>
           Add Contact
         </Button>
       </Box>
-      <Typography sx={{ color: '#777', mb: 3 }}>
-        A shared contact book for suppliers, staff, customers, and everyone else the cafe deals with.
-      </Typography>
 
       <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
         <CardContent>

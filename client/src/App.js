@@ -37,7 +37,7 @@ function App() {
 
   return (
     <Router>
-      <Box sx={{ bgcolor: '#f5f3f0', minHeight: '100vh' }}>
+      <Box sx={{ minHeight: '100vh' }}>
         <Navbar />
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />

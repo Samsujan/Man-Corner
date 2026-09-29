@@ -35,6 +35,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import PrintIcon from '@mui/icons-material/Print';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { printBillReceipt } from '../utils/printReceipt';
 
 const Billing = () => {
@@ -167,17 +168,47 @@ const Billing = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography
-        variant="h3"
+      <Box
         sx={{
-          fontFamily: "'Playfair Display', serif",
-          color: '#6f4e37',
-          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
           mb: 3,
+          p: { xs: 2.5, sm: 3.5 },
+          borderRadius: 5,
+          background: 'linear-gradient(115deg, rgba(104,70,47,0.09) 0%, rgba(200,154,98,0.14) 100%)',
+          border: '1px solid rgba(104,70,47,0.09)',
         }}
       >
-        💳 Billing
-      </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            placeItems: 'center',
+            width: 58,
+            height: 58,
+            borderRadius: '19px',
+            color: '#68462f',
+            bgcolor: 'rgba(255,253,250,0.8)',
+            boxShadow: '0 7px 18px rgba(57,39,25,0.08)',
+          }}
+        >
+          <PointOfSaleIcon sx={{ fontSize: 29 }} />
+        </Box>
+        <Box>
+          <Typography variant="overline" sx={{ color: '#a17851', fontWeight: 700, letterSpacing: '0.14em' }}>
+            FRONT OF HOUSE
+          </Typography>
+          <Typography
+            variant="h3"
+            sx={{ fontFamily: "'Playfair Display', serif", color: '#503622', fontWeight: 700, lineHeight: 1.05 }}
+          >
+            Billing
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#82766a', mt: 0.5 }}>
+            Build an order, review the total, and print a GST receipt
+          </Typography>
+        </Box>
+      </Box>
 
       <Grid container spacing={3}>
         {/* Menu Selection */}

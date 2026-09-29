@@ -10,6 +10,7 @@ import {
   MenuItem,
   Avatar,
   IconButton,
+  Chip,
 } from '@mui/material';
 import CoffeeIcon from '@mui/icons-material/LocalCafe';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -42,43 +43,89 @@ const Navbar = () => {
       <AppBar
         position="sticky"
         sx={{
-          background: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)',
-          boxShadow: '0 4px 16px rgba(74, 49, 32, 0.25)',
+          background: 'linear-gradient(110deg, #392719 0%, #68462f 60%, #79583c 100%)',
+          boxShadow: '0 8px 24px rgba(57, 39, 25, 0.18)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ minHeight: { xs: 64, sm: 72 }, px: { xs: 2, sm: 3 } }}>
           <IconButton
             color="inherit"
             onClick={() => setSidebarOpen(true)}
-            sx={{ mr: 2 }}
+            sx={{
+              mr: 1.5,
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
+            }}
           >
             <MenuIcon />
           </IconButton>
-          <CoffeeIcon sx={{ mr: 2, fontSize: 32 }} />
-          <Typography
-            variant="h5"
+          <Box
             sx={{
-              fontFamily: "'Playfair Display', serif",
-              fontWeight: 700,
-              flexGrow: 1,
+              mr: 2,
+              width: 40,
+              height: 40,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: '14px',
+              color: '#f8e9cf',
+              bgcolor: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.14)',
             }}
           >
-            Maná Corner
-          </Typography>
+            <CoffeeIcon sx={{ fontSize: 24 }} />
+          </Box>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontFamily: "'Playfair Display', serif",
+                fontWeight: 700,
+                lineHeight: 1.05,
+                letterSpacing: '0.01em',
+              }}
+            >
+              Maná Corner
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', letterSpacing: '0.08em' }}>
+              SOMETHING TO EAT
+            </Typography>
+          </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1.5 } }}>
             <Avatar
               sx={{
-                bgcolor: '#d4a574',
-                color: '#6f4e37',
+                width: 38,
+                height: 38,
+                bgcolor: '#ead0a9',
+                color: '#503622',
                 cursor: 'pointer',
                 fontWeight: 600,
+                border: '2px solid rgba(255,255,255,0.35)',
               }}
               onClick={handleMenu}
             >
               {user?.name?.charAt(0).toUpperCase()}
             </Avatar>
-            <Typography variant="body2">{user?.name}</Typography>
+            <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                {user?.name}
+              </Typography>
+              <Chip
+                size="small"
+                label={user?.role}
+                sx={{
+                  mt: 0.25,
+                  height: 18,
+                  textTransform: 'capitalize',
+                  fontSize: '0.65rem',
+                  color: '#f7e9d4',
+                  bgcolor: 'rgba(255,255,255,0.13)',
+                  '& .MuiChip-label': { px: 0.8 },
+                }}
+              />
+            </Box>
 
             <Menu
               anchorEl={anchorEl}
