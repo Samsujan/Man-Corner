@@ -129,9 +129,9 @@ const buildFullReceiptBytes = (bill) => {
   const createdAt = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  const cashierName = bill.createdBy?.name || '-';
   const halfGST = Number(bill.totalGST || 0) / 2;
   const tokenNumber = getBillTokenNumber(bill);
+  const pricesIncludeGST = items.length > 0 && items.every((item) => item.gstIncluded);
 
   const out = startPrinterBuffer();
   out.push(...cmds.alignCenter);
@@ -147,7 +147,6 @@ const buildFullReceiptBytes = (bill) => {
   out.push(...textBytes(`Bill No: ${bill.billNumber}\n`));
   out.push(...textBytes(`Token No: ${tokenNumber}\n`));
   out.push(...textBytes(`Date: ${dateStr}  Time: ${timeStr}\n`));
-  out.push(...textBytes(`Served by: ${cashierName}\n`));
   out.push(...textBytes(`Payment: ${bill.paymentMethod || '-'}\n`));
   out.push(...textBytes(divider()));
 
@@ -156,16 +155,16 @@ const buildFullReceiptBytes = (bill) => {
     const qty = Number(item.quantity || 0);
     const rate = Number(item.price || 0);
     const gstAmount = Number(item.gstAmount || 0);
-    const total = Number(item.totalAmount || rate * qty + gstAmount);
+    const total = Number(item.totalAmount || rate * qty + (item.gstIncluded ? 0 : gstAmount));
     out.push(...textBytes(`${name}\n`));
-    out.push(...textBytes(padRow(`  ${qty} x Rs.${money(rate)}`, `Rs.${money(total)}`)));
+    out.push(...textBytes(padRow(`  ${qty} x Rs.${money(rate)}${pricesIncludeGST ? ' incl GST' : ''}`, `Rs.${money(total)}`)));
     if (gstAmount > 0) {
       out.push(...textBytes(padRow('  GST', `Rs.${money(gstAmount)}`)));
     }
   });
 
   out.push(...textBytes(divider()));
-  out.push(...textBytes(padRow('Subtotal', `Rs.${money(bill.subtotal)}`)));
+  out.push(...textBytes(padRow('Taxable value', `Rs.${money(bill.subtotal)}`)));
   out.push(...textBytes(padRow('CGST', `Rs.${money(halfGST)}`)));
   out.push(...textBytes(padRow('SGST', `Rs.${money(halfGST)}`)));
   out.push(...cmds.boldOn);

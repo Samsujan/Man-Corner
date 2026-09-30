@@ -35,16 +35,12 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
-import PrintIcon from '@mui/icons-material/Print';
-import BluetoothIcon from '@mui/icons-material/Bluetooth';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import {
   getBillTokenNumber,
   printBillReceipts,
-  printFullBillReceipt,
-  printKitchenTokenReceipt,
 } from '../utils/printReceipt';
 import {
   printBillToBluetoothPrinter,
@@ -175,37 +171,35 @@ const Billing = () => {
   };
 
   const calculateTotal = () => {
-    return selectedItems.reduce((sum, item) => {
-      const itemTotal = item.menuItem.price * item.quantity;
-      const gst = (itemTotal * item.gstRate) / 100;
-      return sum + itemTotal + gst;
-    }, 0);
+    return Number(selectedItems
+      .reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0)
+      .toFixed(2));
   };
 
   const calculateGST = () => {
     return selectedItems.reduce((sum, item) => {
-      const itemTotal = item.menuItem.price * item.quantity;
-      const gst = (itemTotal * item.gstRate) / 100;
+      const inclusiveTotal = Number((item.menuItem.price * item.quantity).toFixed(2));
+      const gst = Number((inclusiveTotal * item.gstRate / (100 + item.gstRate)).toFixed(2));
       return sum + gst;
     }, 0);
   };
 
-  const [bluetoothPrintingId, setBluetoothPrintingId] = useState(null);
+  const [printingBillId, setPrintingBillId] = useState(null);
   const [lastBill, setLastBill] = useState(null);
 
-  const handlePrintBoth = (bill) => {
-    printBillReceipts(bill);
-  };
-
-  const handleBluetoothPrint = async (bill) => {
-    setBluetoothPrintingId(bill._id);
+  const handlePrintBoth = async (bill) => {
+    setPrintingBillId(bill._id);
     try {
-      await printBillToBluetoothPrinter(bill);
+      if (isBluetoothPrintSupported()) {
+        await printBillToBluetoothPrinter(bill);
+      } else {
+        printBillReceipts(bill);
+      }
     } catch (error) {
-      console.error('Bluetooth print failed:', error);
-      alert(`❌ Bluetooth printing failed: ${error.message || 'Unknown error'}`);
+      console.error('Receipt printing failed:', error);
+      alert(`❌ Printing failed: ${error.message || 'Unknown error'}`);
     } finally {
-      setBluetoothPrintingId(null);
+      setPrintingBillId(null);
     }
   };
 
@@ -223,7 +217,6 @@ const Billing = () => {
       setSelectedItems([]);
       setPaymentMethod('Cash');
       setOpenDialog(false);
-      printBillReceipts(response.data);
       setLastBill(response.data);
       fetchData();
     } catch (error) {
@@ -279,7 +272,7 @@ const Billing = () => {
             Billing
           </Typography>
           <Typography variant="body2" sx={{ color: '#82766a', mt: 0.5 }}>
-            Build an order, review the total, and print a GST receipt
+          Tap item icons, confirm GST-inclusive prices, and print both receipts
           </Typography>
         </Box>
       </Box>
@@ -406,6 +399,9 @@ const Billing = () => {
                         </Typography>
                         <Typography variant="body2" sx={{ color: '#68462f', fontWeight: 700 }}>
                           ₹{Number(item.price).toFixed(2)}
+                          <Typography component="span" variant="caption" sx={{ color: '#8b7d71', ml: 0.5, fontWeight: 500 }}>
+                            incl. GST
+                          </Typography>
                         </Typography>
                         {quantity === 0 ? (
                           <Button
@@ -474,7 +470,7 @@ const Billing = () => {
                       <TableRow sx={{ bgcolor: '#f5f3f0' }}>
                         <TableCell>Item</TableCell>
                         <TableCell align="right">Qty</TableCell>
-                        <TableCell align="right">Total</TableCell>
+                        <TableCell align="right">Total incl. GST</TableCell>
                         <TableCell align="center">Action</TableCell>
                       </TableRow>
                     </TableHead>
@@ -505,7 +501,7 @@ const Billing = () => {
 
               <Box sx={{ bgcolor: '#f5f3f0', p: 2, borderRadius: '12px', mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Subtotal:</Typography>
+                  <Typography>Items (incl. GST):</Typography>
                   <Typography sx={{ fontWeight: 600 }}>
                     ₹
                     {selectedItems
@@ -514,7 +510,7 @@ const Billing = () => {
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>GST:</Typography>
+                  <Typography>GST included:</Typography>
                   <Typography sx={{ fontWeight: 600, color: '#3498db' }}>
                     ₹{calculateGST().toFixed(2)}
                   </Typography>
@@ -600,7 +596,7 @@ const Billing = () => {
                 <TableCell align="right">Amount</TableCell>
                 <TableCell>Payment</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell align="center">Receipt</TableCell>
+                <TableCell align="center">Print</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -629,28 +625,14 @@ const Billing = () => {
                     />
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton size="small" onClick={() => handlePrintBoth(bill)} title="Print customer + kitchen receipts">
+                    <IconButton
+                      size="small"
+                      onClick={() => handlePrintBoth(bill)}
+                      disabled={printingBillId === bill._id}
+                      title="Print customer and kitchen receipts"
+                    >
                       <ReceiptLongIcon fontSize="small" sx={{ color: '#6f4e37' }} />
                     </IconButton>
-                    <IconButton size="small" onClick={() => printFullBillReceipt(bill)} title="Print full customer bill">
-                      <PrintIcon fontSize="small" sx={{ color: '#6f4e37' }} />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => printKitchenTokenReceipt(bill)} title="Print kitchen token receipt">
-                      <RestaurantMenuIcon fontSize="small" sx={{ color: '#8a6b4c' }} />
-                    </IconButton>
-                    {isBluetoothPrintSupported() && (
-                      <IconButton
-                        size="small"
-                        onClick={() => handleBluetoothPrint(bill)}
-                        disabled={bluetoothPrintingId === bill._id}
-                        title="Print to Bluetooth printer (e.g. POSIFLOW KP307)"
-                      >
-                        <BluetoothIcon
-                          fontSize="small"
-                          sx={{ color: bluetoothPrintingId === bill._id ? '#bbb' : '#1565c0' }}
-                        />
-                      </IconButton>
-                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -669,15 +651,15 @@ const Billing = () => {
         onClose={() => setLastBill(null)}
         message={lastBill ? `Bill ${lastBill.billNumber} / Token ${getBillTokenNumber(lastBill)} created` : ''}
         action={
-          isBluetoothPrintSupported() && lastBill ? (
+          lastBill ? (
             <Button
               size="small"
-              startIcon={<BluetoothIcon fontSize="small" />}
+              startIcon={<ReceiptLongIcon fontSize="small" />}
               sx={{ color: '#90caf9' }}
-              disabled={bluetoothPrintingId === lastBill._id}
-              onClick={() => handleBluetoothPrint(lastBill)}
+              disabled={printingBillId === lastBill._id}
+              onClick={() => handlePrintBoth(lastBill)}
             >
-              Print both via Bluetooth
+              Print both receipts
             </Button>
           ) : null
         }

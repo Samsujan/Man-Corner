@@ -267,7 +267,7 @@ const MenuManagement = () => {
                       <TableHead>
                         <TableRow sx={{ bgcolor: '#fbf9f7' }}>
                           <TableCell>Item</TableCell>
-                          <TableCell align="right">Price</TableCell>
+                          <TableCell align="right">Price (incl. GST)</TableCell>
                           <TableCell align="right">GST</TableCell>
                           <TableCell align="right">Actions</TableCell>
                         </TableRow>
@@ -331,11 +331,12 @@ const MenuManagement = () => {
             </FormControl>
             <TextField
               required
-              label="Price (₹)"
+              label="Price (₹, including GST)"
               type="number"
               inputProps={{ min: 0, step: '0.01' }}
               value={formData.price}
               onChange={(event) => setFormData({ ...formData, price: event.target.value })}
+              helperText="This is the final customer price; GST is included in it."
             />
             <FormControl fullWidth>
               <InputLabel>GST rate</InputLabel>

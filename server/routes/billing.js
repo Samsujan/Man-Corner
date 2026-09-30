@@ -77,7 +77,8 @@ router.post('/', authMiddleware, async (req, res) => {
       const quantity = Number(item.quantity);
       const price = Number(menuItem.price);
       const gstRate = Number(menuItem.gst_rate);
-      const gstAmount = Number(((price * quantity * gstRate) / 100).toFixed(2));
+      const totalAmount = Number((price * quantity).toFixed(2));
+      const gstAmount = Number((totalAmount * gstRate / (100 + gstRate)).toFixed(2));
       return {
         menuItem: menuItem.id,
         name: menuItem.name,
@@ -85,10 +86,11 @@ router.post('/', authMiddleware, async (req, res) => {
         price,
         gstRate,
         gstAmount,
-        totalAmount: Number((price * quantity + gstAmount).toFixed(2))
+        totalAmount,
+        gstIncluded: true
       };
     });
-    const subtotal = Number(billItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2));
+    const subtotal = Number(billItems.reduce((sum, item) => sum + item.totalAmount - item.gstAmount, 0).toFixed(2));
     const totalGST = Number(billItems.reduce((sum, item) => sum + item.gstAmount, 0).toFixed(2));
     const total = Number((subtotal + totalGST).toFixed(2));
     const billNumber = `MAN-${Date.now()}-${randomBytes(3).toString('hex').toUpperCase()}`;

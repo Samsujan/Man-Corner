@@ -46,16 +46,16 @@ const printHtmlDocument = (html) => {
 // Builds a printable Indian-restaurant-style GST bill (item-wise qty, rate,
 // GST amount and total, plus a CGST/SGST split) and opens the browser print
 // dialog in a separate window so it doesn't disturb the app's own styling.
-export const printFullBillReceipt = (bill) => {
+export const printFullBillReceipt = (bill, shouldPrint = true) => {
   if (!bill) return;
 
   const items = bill.items || [];
   const createdAt = formatDate(bill.createdAt);
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  const cashierName = bill.createdBy?.name || '—';
   const halfGST = Number(bill.totalGST || 0) / 2;
   const tokenNumber = getBillTokenNumber(bill);
+  const pricesIncludeGST = items.length > 0 && items.every((item) => item.gstIncluded);
 
   const rows = items.map((item) => {
     const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
@@ -125,7 +125,6 @@ export const printFullBillReceipt = (bill) => {
   <div class="meta">Bill No: <strong>${escapeHtml(bill.billNumber)}</strong></div>
   <div class="meta">Token No: <strong>${escapeHtml(tokenNumber)}</strong></div>
   <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
-  <div class="meta">Served by: ${escapeHtml(cashierName)}</div>
   <div class="meta">Payment mode: ${escapeHtml(bill.paymentMethod || '—')}</div>
   <hr />
   <table>
@@ -133,7 +132,7 @@ export const printFullBillReceipt = (bill) => {
       <tr>
         <th>Item</th>
         <th class="c">Qty</th>
-        <th class="r">Rate</th>
+        <th class="r">${pricesIncludeGST ? 'Rate (incl. GST)' : 'Rate'}</th>
         <th class="r">GST Amt</th>
         <th class="r">Total</th>
       </tr>
@@ -144,7 +143,7 @@ export const printFullBillReceipt = (bill) => {
   </table>
   <hr />
   <div class="totals">
-    <div><span>Subtotal</span><span>${formatCurrency(bill.subtotal)}</span></div>
+    <div><span>Taxable value</span><span>${formatCurrency(bill.subtotal)}</span></div>
     <div><span>CGST</span><span>${formatCurrency(halfGST)}</span></div>
     <div><span>SGST</span><span>${formatCurrency(halfGST)}</span></div>
     <div class="grand"><span>Grand Total</span><span>${formatCurrency(bill.total)}</span></div>
@@ -152,10 +151,11 @@ export const printFullBillReceipt = (bill) => {
   <div class="footer">Thank you! Visit again 🙏</div>
 </body>
 </html>`;
-  printHtmlDocument(html);
+  if (shouldPrint) printHtmlDocument(html);
+  return html;
 };
 
-export const printKitchenTokenReceipt = (bill) => {
+export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
   if (!bill) return;
 
   const items = bill.items || [];
@@ -234,14 +234,35 @@ export const printKitchenTokenReceipt = (bill) => {
 </body>
 </html>`;
 
-  printHtmlDocument(html);
+  if (shouldPrint) printHtmlDocument(html);
+  return html;
 };
 
 export const printBillReceipts = (bill) => {
-  printFullBillReceipt(bill);
-  setTimeout(() => {
-    printKitchenTokenReceipt(bill);
-  }, 250);
+  if (!bill) return;
+  const customerReceipt = printFullBillReceipt(bill, false);
+  const kitchenReceipt = printKitchenTokenReceipt(bill, false);
+  if (!customerReceipt || !kitchenReceipt) return;
+
+  const extract = (document, tag) => document.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1] || '';
+  const combinedHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Bill ${escapeHtml(bill.billNumber)} and kitchen token ${escapeHtml(getBillTokenNumber(bill))}</title>
+<style>
+  ${extract(customerReceipt, 'style')}
+  ${extract(kitchenReceipt, 'style')}
+  .receipt-divider { border-top: 2px dashed #000; margin: 10px 0; }
+</style>
+</head>
+<body>
+  ${extract(customerReceipt, 'body')}
+  <div class="receipt-divider"></div>
+  ${extract(kitchenReceipt, 'body')}
+</body>
+</html>`;
+  printHtmlDocument(combinedHtml);
 };
 
 // Backward-compatible alias.
