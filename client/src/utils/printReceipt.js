@@ -27,6 +27,12 @@ export const getBillTokenNumber = (bill) => {
   return digits.slice(-4).padStart(4, '0');
 };
 
+export const getCompactBillNumber = (billNumber) => {
+  const value = String(billNumber || '');
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 4)}...${value.slice(-6)}`;
+};
+
 const printHtmlDocument = (html) => {
   const printWindow = window.open('', '_blank', 'width=420,height=700');
   if (!printWindow) {
@@ -55,6 +61,7 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const halfGST = Number(bill.totalGST || 0) / 2;
   const tokenNumber = getBillTokenNumber(bill);
+  const compactBillNumber = getCompactBillNumber(bill.billNumber);
   const pricesIncludeGST = items.length > 0 && items.every((item) => item.gstIncluded);
 
   const rows = items.map((item) => {
@@ -92,6 +99,7 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
   .name { font-size: 21px; font-weight: bold; letter-spacing: 0.5px; }
   .tagline { font-size: 12px; font-style: italic; margin-top: 1px; }
   .meta { font-size: 11px; margin: 2px 0; }
+  .bill-id { font-size: 9px; margin: 2px 0; overflow-wrap: anywhere; }
   .muted { color: #444; font-size: 9px; }
   hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
   table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
@@ -122,7 +130,7 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
     <div class="meta">GSTIN: ${RESTAURANT_INFO.gstin ? escapeHtml(RESTAURANT_INFO.gstin) : '(to be added)'}</div>
   </div>
   <hr />
-  <div class="meta">Bill No: <strong>${escapeHtml(bill.billNumber)}</strong></div>
+  <div class="bill-id">Bill No: <strong>${escapeHtml(compactBillNumber)}</strong></div>
   <div class="meta">Token No: <strong>${escapeHtml(tokenNumber)}</strong></div>
   <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   <div class="meta">Payment mode: ${escapeHtml(bill.paymentMethod || '—')}</div>

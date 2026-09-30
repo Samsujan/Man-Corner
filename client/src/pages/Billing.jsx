@@ -39,6 +39,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import {
+  getCompactBillNumber,
   getBillTokenNumber,
   printBillReceipts,
 } from '../utils/printReceipt';
@@ -603,8 +604,22 @@ const Billing = () => {
               {bills.slice(0, 5).map((bill) => (
                 <TableRow key={bill._id} hover>
                   <TableCell>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                      {bill.billNumber}
+                    <Typography
+                      variant="caption"
+                      title={bill.billNumber}
+                      sx={{
+                        display: 'block',
+                        maxWidth: 125,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'monospace',
+                        fontSize: '0.65rem',
+                        fontWeight: 600,
+                        color: '#6f6257',
+                      }}
+                    >
+                      {getCompactBillNumber(bill.billNumber)}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -649,7 +664,7 @@ const Billing = () => {
         open={!!lastBill}
         autoHideDuration={8000}
         onClose={() => setLastBill(null)}
-        message={lastBill ? `Bill ${lastBill.billNumber} / Token ${getBillTokenNumber(lastBill)} created` : ''}
+        message={lastBill ? `Bill ${getCompactBillNumber(lastBill.billNumber)} / Token ${getBillTokenNumber(lastBill)} created` : ''}
         action={
           lastBill ? (
             <Button
