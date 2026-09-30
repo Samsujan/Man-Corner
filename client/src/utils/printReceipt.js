@@ -21,10 +21,8 @@ const formatDate = (value) => {
 };
 
 export const getBillTokenNumber = (bill) => {
-  if (bill?.tokenNumber) return String(bill.tokenNumber);
-  const digits = String(bill?.billNumber || '').replace(/\D/g, '');
-  if (!digits) return '0000';
-  return digits.slice(-4).padStart(4, '0');
+  const token = bill?.tokenNumber ?? bill?.token_number;
+  return token == null ? '—' : String(token).padStart(2, '0');
 };
 
 export const getCompactBillNumber = (billNumber) => {

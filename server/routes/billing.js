@@ -6,10 +6,9 @@ const router = express.Router();
 
 const paymentMethods = ['Cash', 'Card', 'UPI', 'Online'];
 
-const getTokenNumber = (billNumber = '') => {
+const getLegacyTokenNumber = (billNumber = '') => {
   const digits = String(billNumber).replace(/\D/g, '');
-  if (!digits) return '0000';
-  return digits.slice(-4).padStart(4, '0');
+  return digits ? digits.slice(-4).padStart(4, '0') : null;
 };
 
 const applyDateFilter = (query, column, startDate, endDate) => {
@@ -26,7 +25,10 @@ const expandBill = (bill, usersById, menuById) => ({
   ...bill,
   _id: bill.id,
   billNumber: bill.bill_number,
-  tokenNumber: getTokenNumber(bill.bill_number),
+  tokenNumber: bill.token_number == null
+    ? getLegacyTokenNumber(bill.bill_number)
+    : String(bill.token_number).padStart(2, '0'),
+  tokenDate: bill.token_date,
   createdAt: bill.created_at,
   paymentMethod: bill.payment_method,
   subtotal: Number(bill.subtotal),
