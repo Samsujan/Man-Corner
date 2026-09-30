@@ -19,6 +19,9 @@ const applyDateFilter = (query, column, startDate, endDate) => {
 const expandBill = (bill, usersById, menuById) => ({
   ...bill,
   _id: bill.id,
+  billNumber: bill.bill_number,
+  createdAt: bill.created_at,
+  paymentMethod: bill.payment_method,
   subtotal: Number(bill.subtotal),
   totalGST: Number(bill.total_gst),
   total: Number(bill.total),

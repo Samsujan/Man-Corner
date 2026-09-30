@@ -73,6 +73,13 @@ const MenuItemPhoto = ({ item }) => {
   );
 };
 
+const formatBillDate = (bill) => {
+  const value = bill.createdAt || bill.created_at;
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-IN');
+};
+
 const Billing = () => {
   const [menuItems, setMenuItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
@@ -555,7 +562,7 @@ const Billing = () => {
                       {bill.billNumber}
                     </Typography>
                   </TableCell>
-                  <TableCell>{new Date(bill.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatBillDate(bill)}</TableCell>
                   <TableCell align="right">₹{bill.total.toFixed(2)}</TableCell>
                   <TableCell>{bill.paymentMethod}</TableCell>
                   <TableCell>
