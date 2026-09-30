@@ -1,4 +1,5 @@
 import { RESTAURANT_INFO } from '../config/restaurant';
+import { getBillTokenNumber } from './printReceipt';
 
 // Web Bluetooth ESC/POS printing for Bluetooth thermal printers such as the
 // POSIFLOW KP307. This is an ADDITIONAL print path alongside printReceipt.js
@@ -113,18 +114,23 @@ const writeBytes = async (characteristic, bytes) => {
   }
 };
 
-// Builds the raw ESC/POS byte sequence for a bill, using the same figures
-// (items, GST split, totals) as the printable HTML receipt.
-const buildReceiptBytes = (bill) => {
+const startPrinterBuffer = () => {
+  let out = [];
+  out.push(...cmds.init);
+  out.push(...cmds.alignLeft);
+  return out;
+};
+
+const buildFullReceiptBytes = (bill) => {
   const items = bill.items || [];
   const createdAt = bill.createdAt ? new Date(bill.createdAt) : new Date();
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const cashierName = bill.createdBy?.name || '-';
   const halfGST = Number(bill.totalGST || 0) / 2;
+  const tokenNumber = getBillTokenNumber(bill);
 
-  let out = [];
-  out.push(...cmds.init);
+  const out = startPrinterBuffer();
   out.push(...cmds.alignCenter);
   out.push(...cmds.boldOn);
   out.push(...textBytes(`${RESTAURANT_INFO.name}\n`));
@@ -136,6 +142,7 @@ const buildReceiptBytes = (bill) => {
   out.push(...cmds.alignLeft);
   out.push(...textBytes(divider()));
   out.push(...textBytes(`Bill No: ${bill.billNumber}\n`));
+  out.push(...textBytes(`Token No: ${tokenNumber}\n`));
   out.push(...textBytes(`Date: ${dateStr}  Time: ${timeStr}\n`));
   out.push(...textBytes(`Served by: ${cashierName}\n`));
   out.push(...textBytes(`Payment: ${bill.paymentMethod || '-'}\n`));
@@ -170,14 +177,64 @@ const buildReceiptBytes = (bill) => {
   return out;
 };
 
+const buildKitchenReceiptBytes = (bill) => {
+  const items = bill.items || [];
+  const createdAt = bill.createdAt ? new Date(bill.createdAt) : new Date();
+  const dateStr = createdAt.toLocaleDateString('en-IN');
+  const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const tokenNumber = getBillTokenNumber(bill);
+
+  const out = startPrinterBuffer();
+  out.push(...cmds.alignCenter);
+  out.push(...cmds.boldOn);
+  out.push(...textBytes(`${RESTAURANT_INFO.name}\n`));
+  out.push(...cmds.boldOff);
+  out.push(...textBytes(`${RESTAURANT_INFO.tagline}\n`));
+  out.push(...textBytes(divider()));
+  out.push(...cmds.boldOn);
+  out.push(...textBytes(`TOKEN ${tokenNumber}\n`));
+  out.push(...cmds.boldOff);
+  out.push(...textBytes(`Date: ${dateStr} ${timeStr}\n`));
+  out.push(...cmds.alignLeft);
+  out.push(...textBytes(divider()));
+  items.forEach((item) => {
+    const name = item.menuItem?.name || item.name || 'Item';
+    const qty = Number(item.quantity || 0);
+    out.push(...textBytes(padRow(name, `x${qty}`)));
+  });
+  out.push(...textBytes(divider()));
+  out.push(...cmds.alignCenter);
+  out.push(...textBytes('Kitchen Copy\n'));
+  out.push(...textBytes('\n\n\n'));
+  out.push(...cmds.cut);
+  return out;
+};
+
 // Connects (or reuses the last connected printer) and sends the bill to it.
 // Must be invoked directly from a user click handler — Web Bluetooth's
 // device picker will not open otherwise.
+export const printFullBillToBluetoothPrinter = async (bill) => {
+  if (!bill) return;
+  const { characteristic } = await connectBluetoothPrinter();
+  const bytes = buildFullReceiptBytes(bill);
+  await writeBytes(characteristic, bytes);
+};
+
+export const printKitchenTokenToBluetoothPrinter = async (bill) => {
+  if (!bill) return;
+  const { characteristic } = await connectBluetoothPrinter();
+  const bytes = buildKitchenReceiptBytes(bill);
+  await writeBytes(characteristic, bytes);
+};
+
 export const printBillToBluetoothPrinter = async (bill) => {
   if (!bill) return;
   const { characteristic } = await connectBluetoothPrinter();
-  const bytes = buildReceiptBytes(bill);
-  await writeBytes(characteristic, bytes);
+  const fullBytes = buildFullReceiptBytes(bill);
+  await writeBytes(characteristic, fullBytes);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const kitchenBytes = buildKitchenReceiptBytes(bill);
+  await writeBytes(characteristic, kitchenBytes);
 };
 
 export const disconnectBluetoothPrinter = () => {

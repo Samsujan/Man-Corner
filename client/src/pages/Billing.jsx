@@ -37,10 +37,19 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import PrintIcon from '@mui/icons-material/Print';
 import BluetoothIcon from '@mui/icons-material/Bluetooth';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
-import { printBillReceipt } from '../utils/printReceipt';
-import { printBillToBluetoothPrinter, isBluetoothPrintSupported } from '../utils/blePrinter';
+import {
+  getBillTokenNumber,
+  printBillReceipts,
+  printFullBillReceipt,
+  printKitchenTokenReceipt,
+} from '../utils/printReceipt';
+import {
+  printBillToBluetoothPrinter,
+  isBluetoothPrintSupported,
+} from '../utils/blePrinter';
 
 const MenuItemPhoto = ({ item }) => {
   const [imageFailed, setImageFailed] = useState(false);
@@ -184,6 +193,10 @@ const Billing = () => {
   const [bluetoothPrintingId, setBluetoothPrintingId] = useState(null);
   const [lastBill, setLastBill] = useState(null);
 
+  const handlePrintBoth = (bill) => {
+    printBillReceipts(bill);
+  };
+
   const handleBluetoothPrint = async (bill) => {
     setBluetoothPrintingId(bill._id);
     try {
@@ -210,7 +223,7 @@ const Billing = () => {
       setSelectedItems([]);
       setPaymentMethod('Cash');
       setOpenDialog(false);
-      printBillReceipt(response.data);
+      printBillReceipts(response.data);
       setLastBill(response.data);
       fetchData();
     } catch (error) {
@@ -325,96 +338,112 @@ const Billing = () => {
                 ))}
               </Tabs>
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: 'repeat(2, minmax(0, 1fr))',
+                    sm: 'repeat(3, minmax(0, 1fr))',
+                    lg: 'repeat(4, minmax(0, 1fr))',
+                  },
+                  gap: 1.5,
+                }}
+              >
                 {visibleItems.map((item) => {
                   const quantity = getQuantity(item._id);
                   return (
-                    <Box key={item._id}>
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          p: 1,
-                          borderRadius: '16px',
-                          borderColor: quantity > 0 ? '#98745b' : 'rgba(104,70,47,0.13)',
-                          bgcolor: quantity > 0 ? '#f7f0e7' : '#fffefa',
-                          transition: 'border-color 160ms ease, background-color 160ms ease, transform 160ms ease',
-                          '&:hover': {
-                            borderColor: '#98745b',
-                            transform: 'translateY(-1px)',
-                          },
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Card
+                      key={item._id}
+                      variant="outlined"
+                      sx={{
+                        p: 1,
+                        borderRadius: '16px',
+                        borderColor: quantity > 0 ? '#98745b' : 'rgba(104,70,47,0.13)',
+                        bgcolor: quantity > 0 ? '#f7f0e7' : '#fffefa',
+                        transition: 'border-color 160ms ease, background-color 160ms ease, transform 160ms ease',
+                        '&:hover': {
+                          borderColor: '#98745b',
+                          transform: 'translateY(-1px)',
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.9 }}>
+                        <Box sx={{ position: 'relative' }}>
                           <MenuItemPhoto item={item} />
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body1" sx={{ fontWeight: 700, lineHeight: 1.3, color: '#3b3027' }}>
-                              {item.name}
-                            </Typography>
-                            {item.description && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  display: 'block',
-                                  color: '#87796d',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  mt: 0.35,
-                                }}
-                              >
-                                {item.description}
-                              </Typography>
-                            )}
-                            <Typography variant="body2" sx={{ color: '#68462f', fontWeight: 700, mt: 0.5 }}>
-                              ₹{Number(item.price).toFixed(2)}
-                              <Typography component="span" variant="caption" sx={{ color: '#8b7d71', ml: 1, fontWeight: 500 }}>
-                                GST {item.gstRate}%
-                              </Typography>
-                            </Typography>
-                          </Box>
-                          {quantity === 0 ? (
-                            <IconButton
-                              aria-label={`Add ${item.name}`}
-                              onClick={() => addItemToBill(item)}
+                          {quantity > 0 && (
+                            <Chip
+                              size="small"
+                              label={quantity}
                               sx={{
-                                width: 42,
-                                height: 42,
-                                flexShrink: 0,
+                                position: 'absolute',
+                                top: -8,
+                                right: -8,
+                                minWidth: 22,
+                                height: 22,
+                                fontWeight: 700,
                                 bgcolor: '#68462f',
                                 color: '#fff',
-                                '&:hover': { bgcolor: '#503622' },
+                                '& .MuiChip-label': { px: 0.9 },
                               }}
+                            />
+                          )}
+                        </Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                            color: '#3b3027',
+                            textAlign: 'center',
+                            lineHeight: 1.25,
+                            minHeight: 34,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {item.name}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#68462f', fontWeight: 700 }}>
+                          ₹{Number(item.price).toFixed(2)}
+                        </Typography>
+                        {quantity === 0 ? (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<AddIcon fontSize="small" />}
+                            onClick={() => addItemToBill(item)}
+                            sx={{ bgcolor: '#68462f', borderRadius: '999px', px: 1.5, '&:hover': { bgcolor: '#503622' } }}
+                          >
+                            Add
+                          </Button>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                            <IconButton
+                              aria-label={`Remove one ${item.name}`}
+                              onClick={() => decrementItem(item._id)}
+                              sx={{ width: 32, height: 32, bgcolor: '#eee5da', '&:hover': { bgcolor: '#e5d8c8' } }}
+                            >
+                              <RemoveIcon fontSize="small" />
+                            </IconButton>
+                            <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, color: '#503622' }}>
+                              {quantity}
+                            </Typography>
+                            <IconButton
+                              aria-label={`Add one ${item.name}`}
+                              onClick={() => addItemToBill(item)}
+                              sx={{ width: 32, height: 32, bgcolor: '#68462f', color: '#fff', '&:hover': { bgcolor: '#503622' } }}
                             >
                               <AddIcon fontSize="small" />
                             </IconButton>
-                          ) : (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexShrink: 0 }}>
-                              <IconButton
-                                aria-label={`Remove one ${item.name}`}
-                                onClick={() => decrementItem(item._id)}
-                                sx={{ width: 36, height: 36, bgcolor: '#eee5da', '&:hover': { bgcolor: '#e5d8c8' } }}
-                              >
-                                <RemoveIcon fontSize="small" />
-                              </IconButton>
-                              <Typography sx={{ minWidth: 22, textAlign: 'center', fontWeight: 700, color: '#503622' }}>
-                                {quantity}
-                              </Typography>
-                              <IconButton
-                                aria-label={`Add one ${item.name}`}
-                                onClick={() => addItemToBill(item)}
-                                sx={{ width: 36, height: 36, bgcolor: '#68462f', color: '#fff', '&:hover': { bgcolor: '#503622' } }}
-                              >
-                                <AddIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          )}
-                        </Box>
-                      </Card>
-                    </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    </Card>
                   );
                 })}
                 {visibleItems.length === 0 && (
-                  <Box sx={{ py: 4, textAlign: 'center', color: '#888' }}>
+                  <Box sx={{ py: 4, textAlign: 'center', color: '#888', gridColumn: '1/-1' }}>
                     <RestaurantMenuIcon sx={{ fontSize: 34, color: '#b9a58f', mb: 1 }} />
                     <Typography>
                       No dishes match your search.
@@ -436,7 +465,7 @@ const Billing = () => {
 
               {selectedItems.length === 0 ? (
                 <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Tap + on a dish to start a bill.</Typography>
+                  <Typography color="text.secondary">Tap any item icon to start a bill.</Typography>
                 </Box>
               ) : (
                 <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 'none', border: '1px solid #eee2d8' }}>
@@ -566,6 +595,7 @@ const Billing = () => {
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f3f0' }}>
                 <TableCell>Bill ID</TableCell>
+                <TableCell>Token</TableCell>
                 <TableCell>Date</TableCell>
                 <TableCell align="right">Amount</TableCell>
                 <TableCell>Payment</TableCell>
@@ -580,6 +610,9 @@ const Billing = () => {
                     <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
                       {bill.billNumber}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip size="small" label={getBillTokenNumber(bill)} sx={{ fontWeight: 700, bgcolor: '#efe2d4', color: '#503622' }} />
                   </TableCell>
                   <TableCell>{formatBillDate(bill)}</TableCell>
                   <TableCell align="right">₹{bill.total.toFixed(2)}</TableCell>
@@ -596,8 +629,14 @@ const Billing = () => {
                     />
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton size="small" onClick={() => printBillReceipt(bill)} title="Print bill">
+                    <IconButton size="small" onClick={() => handlePrintBoth(bill)} title="Print customer + kitchen receipts">
+                      <ReceiptLongIcon fontSize="small" sx={{ color: '#6f4e37' }} />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => printFullBillReceipt(bill)} title="Print full customer bill">
                       <PrintIcon fontSize="small" sx={{ color: '#6f4e37' }} />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => printKitchenTokenReceipt(bill)} title="Print kitchen token receipt">
+                      <RestaurantMenuIcon fontSize="small" sx={{ color: '#8a6b4c' }} />
                     </IconButton>
                     {isBluetoothPrintSupported() && (
                       <IconButton
@@ -617,7 +656,7 @@ const Billing = () => {
               ))}
               {bills.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">No bills created yet.</TableCell>
+                  <TableCell colSpan={7} align="center">No bills created yet.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -628,7 +667,7 @@ const Billing = () => {
         open={!!lastBill}
         autoHideDuration={8000}
         onClose={() => setLastBill(null)}
-        message={lastBill ? `Bill ${lastBill.billNumber} created` : ''}
+        message={lastBill ? `Bill ${lastBill.billNumber} / Token ${getBillTokenNumber(lastBill)} created` : ''}
         action={
           isBluetoothPrintSupported() && lastBill ? (
             <Button
@@ -638,7 +677,7 @@ const Billing = () => {
               disabled={bluetoothPrintingId === lastBill._id}
               onClick={() => handleBluetoothPrint(lastBill)}
             >
-              Print via Bluetooth
+              Print both via Bluetooth
             </Button>
           ) : null
         }

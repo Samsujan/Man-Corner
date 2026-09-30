@@ -10,19 +10,47 @@ const escapeHtml = (value) =>
   }[char]));
 
 const formatCurrency = (value) => `Rs. ${Number(value || 0).toFixed(2)}`;
+const formatDate = (value) => {
+  const date = value ? new Date(value) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+};
+
+export const getBillTokenNumber = (bill) => {
+  if (bill?.tokenNumber) return String(bill.tokenNumber);
+  const digits = String(bill?.billNumber || '').replace(/\D/g, '');
+  if (!digits) return '0000';
+  return digits.slice(-4).padStart(4, '0');
+};
+
+const printHtmlDocument = (html) => {
+  const printWindow = window.open('', '_blank', 'width=420,height=700');
+  if (!printWindow) {
+    alert('Please allow pop-ups to print the bill.');
+    return false;
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.onload = () => {
+    printWindow.print();
+  };
+  return true;
+};
 
 // Builds a printable Indian-restaurant-style GST bill (item-wise qty, rate,
 // GST amount and total, plus a CGST/SGST split) and opens the browser print
 // dialog in a separate window so it doesn't disturb the app's own styling.
-export const printBillReceipt = (bill) => {
+export const printFullBillReceipt = (bill) => {
   if (!bill) return;
 
   const items = bill.items || [];
-  const createdAt = bill.createdAt ? new Date(bill.createdAt) : new Date();
+  const createdAt = formatDate(bill.createdAt);
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const cashierName = bill.createdBy?.name || '—';
   const halfGST = Number(bill.totalGST || 0) / 2;
+  const tokenNumber = getBillTokenNumber(bill);
 
   const rows = items.map((item) => {
     const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
@@ -45,7 +73,7 @@ export const printBillReceipt = (bill) => {
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Bill ${escapeHtml(bill.billNumber)}</title>
+<title>Customer Bill ${escapeHtml(bill.billNumber)}</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -84,6 +112,7 @@ export const printBillReceipt = (bill) => {
   </div>
   <hr />
   <div class="meta">Bill No: <strong>${escapeHtml(bill.billNumber)}</strong></div>
+  <div class="meta">Token No: <strong>${escapeHtml(tokenNumber)}</strong></div>
   <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   <div class="meta">Served by: ${escapeHtml(cashierName)}</div>
   <div class="meta">Payment mode: ${escapeHtml(bill.paymentMethod || '—')}</div>
@@ -112,17 +141,96 @@ export const printBillReceipt = (bill) => {
   <div class="footer">Thank you! Visit again 🙏</div>
 </body>
 </html>`;
-
-  const printWindow = window.open('', '_blank', 'width=400,height=650');
-  if (!printWindow) {
-    alert('Please allow pop-ups to print the bill.');
-    return;
-  }
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.onload = () => {
-    printWindow.print();
-  };
+  printHtmlDocument(html);
 };
+
+export const printKitchenTokenReceipt = (bill) => {
+  if (!bill) return;
+
+  const items = bill.items || [];
+  const createdAt = formatDate(bill.createdAt);
+  const dateStr = createdAt.toLocaleDateString('en-IN');
+  const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const tokenNumber = getBillTokenNumber(bill);
+
+  const rows = items.map((item) => {
+    const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
+    const qty = Number(item.quantity || 0);
+    return `
+      <tr>
+        <td>${name}</td>
+        <td class="c">${qty}</td>
+      </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Kitchen Token ${escapeHtml(tokenNumber)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    width: 280px;
+    margin: 0 auto;
+    padding: 14px;
+    color: #000;
+  }
+  .center { text-align: center; }
+  .name { font-size: 18px; font-weight: bold; letter-spacing: 0.4px; }
+  .tagline { font-size: 11px; font-style: italic; margin-top: 1px; }
+  .token {
+    margin-top: 8px;
+    font-size: 24px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  .meta { font-size: 12px; margin: 3px 0; }
+  hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 4px 2px; vertical-align: top; }
+  th.c, td.c { text-align: center; width: 52px; }
+  thead tr { border-bottom: 1px solid #000; }
+  .footer { text-align: center; font-size: 12px; margin-top: 10px; }
+  @media print {
+    @page { margin: 4mm; }
+  }
+</style>
+</head>
+<body>
+  <div class="center">
+    <div class="name">${escapeHtml(RESTAURANT_INFO.name)}</div>
+    <div class="tagline">${escapeHtml(RESTAURANT_INFO.tagline)}</div>
+    <div class="token">TOKEN ${escapeHtml(tokenNumber)}</div>
+    <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
+  </div>
+  <hr />
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th class="c">Qty</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+  <hr />
+  <div class="footer">Kitchen Copy</div>
+</body>
+</html>`;
+
+  printHtmlDocument(html);
+};
+
+export const printBillReceipts = (bill) => {
+  printFullBillReceipt(bill);
+  setTimeout(() => {
+    printKitchenTokenReceipt(bill);
+  }, 250);
+};
+
+// Backward-compatible alias.
+export const printBillReceipt = printBillReceipts;

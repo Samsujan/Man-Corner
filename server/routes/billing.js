@@ -6,6 +6,12 @@ const router = express.Router();
 
 const paymentMethods = ['Cash', 'Card', 'UPI', 'Online'];
 
+const getTokenNumber = (billNumber = '') => {
+  const digits = String(billNumber).replace(/\D/g, '');
+  if (!digits) return '0000';
+  return digits.slice(-4).padStart(4, '0');
+};
+
 const applyDateFilter = (query, column, startDate, endDate) => {
   if (startDate) query = query.gte(column, new Date(startDate).toISOString());
   if (endDate) {
@@ -20,6 +26,7 @@ const expandBill = (bill, usersById, menuById) => ({
   ...bill,
   _id: bill.id,
   billNumber: bill.bill_number,
+  tokenNumber: getTokenNumber(bill.bill_number),
   createdAt: bill.created_at,
   paymentMethod: bill.payment_method,
   subtotal: Number(bill.subtotal),
