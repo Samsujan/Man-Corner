@@ -29,15 +29,18 @@ import {
   Chip,
   IconButton,
   InputAdornment,
+  Snackbar,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import PrintIcon from '@mui/icons-material/Print';
+import BluetoothIcon from '@mui/icons-material/Bluetooth';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import { printBillReceipt } from '../utils/printReceipt';
+import { printBillToBluetoothPrinter, isBluetoothPrintSupported } from '../utils/blePrinter';
 
 const MenuItemPhoto = ({ item }) => {
   const [imageFailed, setImageFailed] = useState(false);
@@ -178,6 +181,21 @@ const Billing = () => {
     }, 0);
   };
 
+  const [bluetoothPrintingId, setBluetoothPrintingId] = useState(null);
+  const [lastBill, setLastBill] = useState(null);
+
+  const handleBluetoothPrint = async (bill) => {
+    setBluetoothPrintingId(bill._id);
+    try {
+      await printBillToBluetoothPrinter(bill);
+    } catch (error) {
+      console.error('Bluetooth print failed:', error);
+      alert(`❌ Bluetooth printing failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setBluetoothPrintingId(null);
+    }
+  };
+
   const handleCreateBill = async () => {
     try {
       const billData = {
@@ -193,6 +211,7 @@ const Billing = () => {
       setPaymentMethod('Cash');
       setOpenDialog(false);
       printBillReceipt(response.data);
+      setLastBill(response.data);
       fetchData();
     } catch (error) {
       console.error('Failed to create bill:', error);
@@ -580,6 +599,19 @@ const Billing = () => {
                     <IconButton size="small" onClick={() => printBillReceipt(bill)} title="Print bill">
                       <PrintIcon fontSize="small" sx={{ color: '#6f4e37' }} />
                     </IconButton>
+                    {isBluetoothPrintSupported() && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleBluetoothPrint(bill)}
+                        disabled={bluetoothPrintingId === bill._id}
+                        title="Print to Bluetooth printer (e.g. POSIFLOW KP307)"
+                      >
+                        <BluetoothIcon
+                          fontSize="small"
+                          sx={{ color: bluetoothPrintingId === bill._id ? '#bbb' : '#1565c0' }}
+                        />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -592,6 +624,25 @@ const Billing = () => {
           </Table>
         </TableContainer>
       </Box>
+      <Snackbar
+        open={!!lastBill}
+        autoHideDuration={8000}
+        onClose={() => setLastBill(null)}
+        message={lastBill ? `Bill ${lastBill.billNumber} created` : ''}
+        action={
+          isBluetoothPrintSupported() && lastBill ? (
+            <Button
+              size="small"
+              startIcon={<BluetoothIcon fontSize="small" />}
+              sx={{ color: '#90caf9' }}
+              disabled={bluetoothPrintingId === lastBill._id}
+              onClick={() => handleBluetoothPrint(lastBill)}
+            >
+              Print via Bluetooth
+            </Button>
+          ) : null
+        }
+      />
     </Container>
   );
 };
