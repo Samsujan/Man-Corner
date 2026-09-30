@@ -1,4 +1,9 @@
 import { RESTAURANT_INFO } from '../config/restaurant';
+import {
+  RECEIPT_CONTENT_WIDTH_MM,
+  RECEIPT_PAGE_MARGIN_MM,
+  RECEIPT_PAPER_WIDTH_MM,
+} from '../config/printLayout';
 
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -78,27 +83,33 @@ export const printFullBillReceipt = (bill) => {
   * { box-sizing: border-box; }
   body {
     font-family: 'Courier New', Courier, monospace;
-    width: 320px;
+    width: ${RECEIPT_CONTENT_WIDTH_MM}mm;
     margin: 0 auto;
-    padding: 16px;
+    padding: 0;
     color: #000;
   }
   .center { text-align: center; }
-  .name { font-size: 20px; font-weight: bold; letter-spacing: 0.5px; }
-  .tagline { font-size: 12px; font-style: italic; margin-top: 2px; }
-  .meta { font-size: 12px; margin: 2px 0; }
-  .muted { color: #444; font-size: 10px; }
-  hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { text-align: left; padding: 3px 2px; vertical-align: top; }
+  .name { font-size: 21px; font-weight: bold; letter-spacing: 0.5px; }
+  .tagline { font-size: 12px; font-style: italic; margin-top: 1px; }
+  .meta { font-size: 11px; margin: 2px 0; }
+  .muted { color: #444; font-size: 9px; }
+  hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+  th, td { text-align: left; padding: 3px 1px; vertical-align: top; overflow-wrap: anywhere; }
+  th:first-child, td:first-child { width: 32%; }
+  th:nth-child(2), td:nth-child(2) { width: 8%; }
+  th:nth-child(3), td:nth-child(3) { width: 17%; }
+  th:nth-child(4), td:nth-child(4) { width: 22%; }
+  th:nth-child(5), td:nth-child(5) { width: 21%; }
   th.c, td.c { text-align: center; }
   th.r, td.r { text-align: right; }
   thead tr { border-bottom: 1px solid #000; }
-  .totals div { display: flex; justify-content: space-between; font-size: 12px; margin: 2px 0; }
-  .grand { font-size: 15px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; }
-  .footer { text-align: center; font-size: 12px; margin-top: 14px; }
+  .totals div { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; margin: 2px 0; }
+  .grand { font-size: 14px; font-weight: bold; border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+  .footer { text-align: center; font-size: 11px; margin-top: 9px; }
   @media print {
-    @page { margin: 4mm; }
+    @page { size: ${RECEIPT_PAPER_WIDTH_MM}mm auto; margin: ${RECEIPT_PAGE_MARGIN_MM}mm; }
+    body { width: ${RECEIPT_CONTENT_WIDTH_MM}mm; }
   }
 </style>
 </head>
@@ -172,13 +183,13 @@ export const printKitchenTokenReceipt = (bill) => {
   * { box-sizing: border-box; }
   body {
     font-family: 'Courier New', Courier, monospace;
-    width: 280px;
+    width: ${RECEIPT_CONTENT_WIDTH_MM}mm;
     margin: 0 auto;
-    padding: 14px;
+    padding: 0;
     color: #000;
   }
   .center { text-align: center; }
-  .name { font-size: 18px; font-weight: bold; letter-spacing: 0.4px; }
+  .name {   font-size: 20px; font-weight: bold; letter-spacing: 0.4px; }
   .tagline { font-size: 11px; font-style: italic; margin-top: 1px; }
   .token {
     margin-top: 8px;
@@ -186,15 +197,16 @@ export const printKitchenTokenReceipt = (bill) => {
     font-weight: bold;
     letter-spacing: 1px;
   }
-  .meta { font-size: 12px; margin: 3px 0; }
-  hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 4px 2px; vertical-align: top; }
-  th.c, td.c { text-align: center; width: 52px; }
+  .meta { font-size: 11px; margin: 3px 0; }
+  hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th, td { text-align: left; padding: 4px 2px; vertical-align: top; overflow-wrap: anywhere; }
+  th.c, td.c { text-align: center; width: 54px; }
   thead tr { border-bottom: 1px solid #000; }
-  .footer { text-align: center; font-size: 12px; margin-top: 10px; }
+  .footer { text-align: center; font-size: 11px; margin-top: 8px; }
   @media print {
-    @page { margin: 4mm; }
+    @page { size: ${RECEIPT_PAPER_WIDTH_MM}mm auto; margin: ${RECEIPT_PAGE_MARGIN_MM}mm; }
+    body { width: ${RECEIPT_CONTENT_WIDTH_MM}mm; }
   }
 </style>
 </head>

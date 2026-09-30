@@ -1,4 +1,5 @@
 import { RESTAURANT_INFO } from '../config/restaurant';
+import { RECEIPT_BLE_LINE_WIDTH } from '../config/printLayout';
 import { getBillTokenNumber } from './printReceipt';
 
 // Web Bluetooth ESC/POS printing for Bluetooth thermal printers such as the
@@ -25,7 +26,7 @@ const CANDIDATE_SERVICES = [
 // short pause in between rather than as one big write.
 const CHUNK_SIZE = 20;
 const CHUNK_DELAY_MS = 20;
-const LINE_WIDTH = 32; // characters per line on a standard 58mm thermal printer
+const LINE_WIDTH = RECEIPT_BLE_LINE_WIDTH;
 
 let cachedPrinter = null; // { device, characteristic }
 
@@ -33,7 +34,8 @@ const ESC = 0x1b;
 const GS = 0x1d;
 
 const encoder = new TextEncoder();
-const textBytes = (str) => Array.from(encoder.encode(str));
+const textBytes = (str) =>
+  Array.from(encoder.encode(String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
 
 const cmds = {
   init: [ESC, 0x40],
@@ -123,7 +125,8 @@ const startPrinterBuffer = () => {
 
 const buildFullReceiptBytes = (bill) => {
   const items = bill.items || [];
-  const createdAt = bill.createdAt ? new Date(bill.createdAt) : new Date();
+  const parsedDate = bill.createdAt ? new Date(bill.createdAt) : new Date();
+  const createdAt = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const cashierName = bill.createdBy?.name || '-';
@@ -171,7 +174,7 @@ const buildFullReceiptBytes = (bill) => {
   out.push(...textBytes(divider()));
   out.push(...cmds.alignCenter);
   out.push(...textBytes('Thank you! Visit again\n'));
-  out.push(...textBytes('\n\n\n'));
+  out.push(...textBytes('\n\n'));
   out.push(...cmds.cut);
 
   return out;
@@ -179,7 +182,8 @@ const buildFullReceiptBytes = (bill) => {
 
 const buildKitchenReceiptBytes = (bill) => {
   const items = bill.items || [];
-  const createdAt = bill.createdAt ? new Date(bill.createdAt) : new Date();
+  const parsedDate = bill.createdAt ? new Date(bill.createdAt) : new Date();
+  const createdAt = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const tokenNumber = getBillTokenNumber(bill);
@@ -205,7 +209,7 @@ const buildKitchenReceiptBytes = (bill) => {
   out.push(...textBytes(divider()));
   out.push(...cmds.alignCenter);
   out.push(...textBytes('Kitchen Copy\n'));
-  out.push(...textBytes('\n\n\n'));
+  out.push(...textBytes('\n\n'));
   out.push(...cmds.cut);
   return out;
 };
