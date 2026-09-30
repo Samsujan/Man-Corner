@@ -52,7 +52,8 @@ app.get('/api/health', (req, res) => {
 
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError ||
-      (typeof error.message === 'string' && error.message.startsWith('Receipts must'))) {
+      (typeof error.message === 'string' &&
+        (error.message.startsWith('Receipts must') || error.message.startsWith('Menu images must')))) {
     return res.status(400).json({ error: error.message });
   }
   if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {

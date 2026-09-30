@@ -33,6 +33,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CloseIcon from '@mui/icons-material/Close';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 
 const emptyItem = {
   name: '',
@@ -51,6 +52,9 @@ const MenuManagement = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [removeImage, setRemoveImage] = useState(false);
 
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -77,6 +81,10 @@ const MenuManagement = () => {
     fetchAll();
   }, []);
 
+  useEffect(() => () => {
+    if (imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
+
   const groupedItems = useMemo(() => {
     const groups = new Map();
     categories.forEach((category) => groups.set(category.name, []));
@@ -90,6 +98,9 @@ const MenuManagement = () => {
   const startCreate = () => {
     setEditingId(null);
     setFormData({ ...emptyItem, category: categories[0]?.name || '' });
+    setImageFile(null);
+    setImagePreview('');
+    setRemoveImage(false);
     setError('');
     setOpen(true);
   };
@@ -103,6 +114,9 @@ const MenuManagement = () => {
       gstRate: item.gstRate,
       description: item.description || '',
     });
+    setImageFile(null);
+    setImagePreview(item.image || '');
+    setRemoveImage(false);
     setError('');
     setOpen(true);
   };
@@ -112,10 +126,15 @@ const MenuManagement = () => {
     setSaving(true);
     setError('');
     try {
+      const payload = new FormData();
+      Object.entries(formData).forEach(([key, value]) => payload.append(key, value));
+      if (imageFile) payload.append('image', imageFile);
+      if (removeImage) payload.append('removeImage', 'true');
+
       if (editingId) {
-        await API.put(`/menu/${editingId}`, formData);
+        await API.put(`/menu/${editingId}`, payload);
       } else {
-        await API.post('/menu', formData);
+        await API.post('/menu', payload);
       }
       setOpen(false);
       await fetchAll();
@@ -337,6 +356,71 @@ const MenuManagement = () => {
               value={formData.description}
               onChange={(event) => setFormData({ ...formData, description: event.target.value })}
             />
+            <Box>
+              <Typography variant="subtitle2" sx={{ color: '#503622', fontWeight: 700, mb: 1 }}>
+                Item photo <Typography component="span" variant="caption" sx={{ color: '#8b7a69', fontWeight: 400 }}>(optional)</Typography>
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+                <Box
+                  sx={{
+                    width: 104,
+                    height: 88,
+                    flexShrink: 0,
+                    display: 'grid',
+                    placeItems: 'center',
+                    overflow: 'hidden',
+                    borderRadius: 3,
+                    color: '#8a6b4c',
+                    bgcolor: '#f5ede2',
+                    border: '1px dashed rgba(104,70,47,0.26)',
+                  }}
+                >
+                  {imagePreview && !removeImage ? (
+                    <Box
+                      component="img"
+                      src={imagePreview}
+                      alt={`${formData.name || 'Menu item'} preview`}
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <ImageOutlinedIcon sx={{ fontSize: 34 }} />
+                  )}
+                </Box>
+                <Box>
+                  <Button component="label" variant="outlined" sx={{ borderColor: '#c8b39a', color: '#68462f' }}>
+                    {imageFile ? 'Choose another photo' : 'Choose photo'}
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setImageFile(file);
+                        setImagePreview(file ? URL.createObjectURL(file) : '');
+                        setRemoveImage(false);
+                      }}
+                    />
+                  </Button>
+                  <Typography variant="caption" display="block" sx={{ color: '#897d71', mt: 0.75 }}>
+                    JPG, PNG, or WEBP · up to 5 MB
+                  </Typography>
+                  {(imageFile || (imagePreview && !removeImage)) && (
+                    <Button
+                      size="small"
+                      color="inherit"
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview('');
+                        setRemoveImage(Boolean(editingId));
+                      }}
+                      sx={{ px: 0, minHeight: 28, color: '#9a594a' }}
+                    >
+                      Remove photo
+                    </Button>
+                  )}
+                </Box>
+              </Stack>
+            </Box>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
             <Button onClick={() => setOpen(false)}>Cancel</Button>

@@ -36,7 +36,42 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import PrintIcon from '@mui/icons-material/Print';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import { printBillReceipt } from '../utils/printReceipt';
+
+const MenuItemPhoto = ({ item }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  return (
+    <Box
+      sx={{
+        width: 76,
+        height: 70,
+        flexShrink: 0,
+        display: 'grid',
+        placeItems: 'center',
+        overflow: 'hidden',
+        borderRadius: '15px',
+        color: '#8a6b4c',
+        bgcolor: '#f5ede2',
+        border: '1px solid rgba(104,70,47,0.08)',
+      }}
+    >
+      {item.image && !imageFailed ? (
+        <Box
+          component="img"
+          src={item.image}
+          alt={item.name}
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+          sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <RestaurantMenuIcon sx={{ fontSize: 31 }} />
+      )}
+    </Box>
+  );
+};
 
 const Billing = () => {
   const [menuItems, setMenuItems] = useState([]);
@@ -264,54 +299,84 @@ const Billing = () => {
                 ))}
               </Tabs>
 
-              <Grid container spacing={1.5}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                 {visibleItems.map((item) => {
                   const quantity = getQuantity(item._id);
                   return (
-                    <Grid item xs={12} sm={6} key={item._id}>
+                    <Box key={item._id}>
                       <Card
                         variant="outlined"
                         sx={{
-                          p: 1.5,
-                          borderRadius: '12px',
-                          borderColor: quantity > 0 ? '#6f4e37' : '#e8e2da',
-                          bgcolor: quantity > 0 ? '#f8f2ec' : '#fbfaf8',
-                          transition: 'all 0.15s ease',
+                          p: 1,
+                          borderRadius: '16px',
+                          borderColor: quantity > 0 ? '#98745b' : 'rgba(104,70,47,0.13)',
+                          bgcolor: quantity > 0 ? '#f7f0e7' : '#fffefa',
+                          transition: 'border-color 160ms ease, background-color 160ms ease, transform 160ms ease',
+                          '&:hover': {
+                            borderColor: '#98745b',
+                            transform: 'translateY(-1px)',
+                          },
                         }}
                       >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ pr: 1 }}>
-                            <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          <MenuItemPhoto item={item} />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 700, lineHeight: 1.3, color: '#3b3027' }}>
                               {item.name}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: '#888' }}>
-                              ₹{item.price} · GST {item.gstRate}%
+                            {item.description && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: 'block',
+                                  color: '#87796d',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  mt: 0.35,
+                                }}
+                              >
+                                {item.description}
+                              </Typography>
+                            )}
+                            <Typography variant="body2" sx={{ color: '#68462f', fontWeight: 700, mt: 0.5 }}>
+                              ₹{Number(item.price).toFixed(2)}
+                              <Typography component="span" variant="caption" sx={{ color: '#8b7d71', ml: 1, fontWeight: 500 }}>
+                                GST {item.gstRate}%
+                              </Typography>
                             </Typography>
                           </Box>
                           {quantity === 0 ? (
                             <IconButton
-                              size="small"
+                              aria-label={`Add ${item.name}`}
                               onClick={() => addItemToBill(item)}
-                              sx={{ bgcolor: '#6f4e37', color: '#fff', '&:hover': { bgcolor: '#4a3120' } }}
+                              sx={{
+                                width: 42,
+                                height: 42,
+                                flexShrink: 0,
+                                bgcolor: '#68462f',
+                                color: '#fff',
+                                '&:hover': { bgcolor: '#503622' },
+                              }}
                             >
                               <AddIcon fontSize="small" />
                             </IconButton>
                           ) : (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexShrink: 0 }}>
                               <IconButton
-                                size="small"
+                                aria-label={`Remove one ${item.name}`}
                                 onClick={() => decrementItem(item._id)}
-                                sx={{ bgcolor: '#e8e2da' }}
+                                sx={{ width: 36, height: 36, bgcolor: '#eee5da', '&:hover': { bgcolor: '#e5d8c8' } }}
                               >
                                 <RemoveIcon fontSize="small" />
                               </IconButton>
-                              <Typography sx={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>
+                              <Typography sx={{ minWidth: 22, textAlign: 'center', fontWeight: 700, color: '#503622' }}>
                                 {quantity}
                               </Typography>
                               <IconButton
-                                size="small"
+                                aria-label={`Add one ${item.name}`}
                                 onClick={() => addItemToBill(item)}
-                                sx={{ bgcolor: '#6f4e37', color: '#fff', '&:hover': { bgcolor: '#4a3120' } }}
+                                sx={{ width: 36, height: 36, bgcolor: '#68462f', color: '#fff', '&:hover': { bgcolor: '#503622' } }}
                               >
                                 <AddIcon fontSize="small" />
                               </IconButton>
@@ -319,17 +384,18 @@ const Billing = () => {
                           )}
                         </Box>
                       </Card>
-                    </Grid>
+                    </Box>
                   );
                 })}
                 {visibleItems.length === 0 && (
-                  <Grid item xs={12}>
-                    <Typography sx={{ p: 2, textAlign: 'center', color: '#888' }}>
+                  <Box sx={{ py: 4, textAlign: 'center', color: '#888' }}>
+                    <RestaurantMenuIcon sx={{ fontSize: 34, color: '#b9a58f', mb: 1 }} />
+                    <Typography>
                       No dishes match your search.
                     </Typography>
-                  </Grid>
+                  </Box>
                 )}
-              </Grid>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

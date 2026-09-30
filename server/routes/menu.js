@@ -1,16 +1,56 @@
 const express = require('express');
+const multer = require('multer');
+const { randomUUID } = require('crypto');
 const supabase = require('../lib/supabase');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 const allowedGstRates = [5, 12, 18, 28];
-const formatMenuItem = item => ({
+const imageBucket = 'mana-corner-menu-images';
+const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter(req, file, callback) {
+    if (!allowedImageTypes.has(file.mimetype)) {
+      return callback(new Error('Menu images must be JPG, PNG, or WEBP files'));
+    }
+    callback(null, true);
+  }
+});
+
+const isStorageImage = image => typeof image === 'string' && !/^https?:\/\//i.test(image);
+const getImageUrl = async image => {
+  if (!image || !isStorageImage(image)) return image || null;
+  const { data, error } = await supabase.storage.from(imageBucket).createSignedUrl(image, 60 * 60);
+  if (error) throw error;
+  return data.signedUrl;
+};
+const formatMenuItem = async item => ({
   ...item,
   _id: item.id,
   price: Number(item.price),
-  gstRate: Number(item.gst_rate)
+  gstRate: Number(item.gst_rate),
+  image: await getImageUrl(item.image)
 });
 const formatCategory = category => ({ ...category, _id: category.id });
+
+const removeStorageImage = async image => {
+  if (!image || !isStorageImage(image)) return;
+  const { error } = await supabase.storage.from(imageBucket).remove([image]);
+  if (error) console.error('Failed to remove old menu image:', error.message);
+};
+
+const uploadMenuImage = async (file, userId) => {
+  const extension = file.mimetype.split('/')[1].replace('jpeg', 'jpg');
+  const path = `${userId}/${randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from(imageBucket).upload(path, file.buffer, {
+    contentType: file.mimetype,
+    upsert: false
+  });
+  if (error) throw error;
+  return path;
+};
 
 async function getCategoryNames() {
   const { data, error } = await supabase.from('mc_categories').select('name');
@@ -105,19 +145,20 @@ router.get('/', async (req, res) => {
       .eq('active', true)
       .order('name');
     if (error) throw error;
-    res.json(data.map(formatMenuItem));
+    res.json(await Promise.all(data.map(formatMenuItem)));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, imageUpload.single('image'), async (req, res) => {
+  let uploadedImage;
   try {
     if (req.user.role !== 'owner') {
       return res.status(403).json({ error: 'Only owners can add menu items' });
     }
 
-    const { name, category, price, gstRate = 5, description, image } = req.body;
+    const { name, category, price, gstRate = 5, description } = req.body;
     const categoryNames = await getCategoryNames();
     if (typeof name !== 'string' || !name.trim() ||
         !categoryNames.includes(category) ||
@@ -125,6 +166,8 @@ router.post('/', authMiddleware, async (req, res) => {
         !allowedGstRates.includes(Number(gstRate))) {
       return res.status(400).json({ error: 'Valid name, category, price, and GST rate are required' });
     }
+
+    if (req.file) uploadedImage = await uploadMenuImage(req.file, req.user.id);
 
     const { data, error } = await supabase
       .from('mc_menu_items')
@@ -134,26 +177,32 @@ router.post('/', authMiddleware, async (req, res) => {
         price: Number(price),
         gst_rate: Number(gstRate),
         description: description || null,
-        image: image || null,
+        image: uploadedImage || null,
         active: true
       })
       .select('*')
       .single();
     if (error) throw error;
-    res.status(201).json(formatMenuItem(data));
+    uploadedImage = null;
+    res.status(201).json(await formatMenuItem(data));
   } catch (error) {
+    if (uploadedImage) {
+      const { error: cleanupError } = await supabase.storage.from(imageBucket).remove([uploadedImage]);
+      if (cleanupError) console.error('Failed to remove unreferenced menu image:', cleanupError.message);
+    }
     res.status(400).json({ error: error.message });
   }
 });
 
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, imageUpload.single('image'), async (req, res) => {
+  let uploadedImage;
   try {
     if (req.user.role !== 'owner') {
       return res.status(403).json({ error: 'Only owners can update menu items' });
     }
 
     const updates = {};
-    const { name, category, price, gstRate, description, image, active } = req.body;
+    const { name, category, price, gstRate, description, removeImage, active } = req.body;
     if (name !== undefined) {
       if (typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: 'Name cannot be empty' });
@@ -180,8 +229,22 @@ router.put('/:id', authMiddleware, async (req, res) => {
       updates.gst_rate = Number(gstRate);
     }
     if (description !== undefined) updates.description = description || null;
-    if (image !== undefined) updates.image = image || null;
     if (active !== undefined) updates.active = Boolean(active);
+
+    const { data: existingItem, error: existingItemError } = await supabase
+      .from('mc_menu_items')
+      .select('image')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (existingItemError) throw existingItemError;
+    if (!existingItem) return res.status(404).json({ error: 'Menu item not found' });
+
+    if (req.file) {
+      uploadedImage = await uploadMenuImage(req.file, req.user.id);
+      updates.image = uploadedImage;
+    } else if (removeImage === 'true') {
+      updates.image = null;
+    }
 
     const { data, error } = await supabase
       .from('mc_menu_items')
@@ -191,8 +254,14 @@ router.put('/:id', authMiddleware, async (req, res) => {
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Menu item not found' });
-    res.json(formatMenuItem(data));
+    uploadedImage = null;
+    if (data.image !== existingItem.image) await removeStorageImage(existingItem.image);
+    res.json(await formatMenuItem(data));
   } catch (error) {
+    if (uploadedImage) {
+      const { error: cleanupError } = await supabase.storage.from(imageBucket).remove([uploadedImage]);
+      if (cleanupError) console.error('Failed to remove unreferenced menu image:', cleanupError.message);
+    }
     res.status(400).json({ error: error.message });
   }
 });
