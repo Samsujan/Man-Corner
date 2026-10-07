@@ -19,9 +19,12 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import PaidIcon from '@mui/icons-material/Paid';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
+import PeopleIcon from '@mui/icons-material/People';
+import ContactsIcon from '@mui/icons-material/Contacts';
 
 const Sidebar = ({ open, onClose }) => {
   const { user } = useSelector((state) => state.auth);
+  const canManageInvestments = user?.email?.toLowerCase() === 'matamsamsujanp@gmail.com';
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -30,7 +33,7 @@ const Sidebar = ({ open, onClose }) => {
       label: 'Dashboard',
       icon: <DashboardIcon />,
       path: '/dashboard',
-      roles: ['owner', 'guest'],
+      roles: ['owner'],
     },
     {
       label: 'Billing',
@@ -38,6 +41,12 @@ const Sidebar = ({ open, onClose }) => {
       path: '/billing',
       roles: ['owner', 'guest'],
       badge: '🧾',
+    },
+    {
+      label: 'Directory',
+      icon: <ContactsIcon />,
+      path: '/directory',
+      roles: ['owner'],
     },
   ];
 
@@ -69,10 +78,16 @@ const Sidebar = ({ open, onClose }) => {
       roles: ['owner'],
       badge: '💰',
     },
+    {
+      label: 'Accounts',
+      icon: <PeopleIcon />,
+      path: '/users',
+      roles: ['owner'],
+    },
   ];
 
   const allItems = [...menuItems, ...ownerOnlyItems].filter((item) =>
-    item.roles.includes(user?.role)
+    item.roles.includes(user?.role) || (item.path === '/expenses' && canManageInvestments)
   );
 
   const handleNavigation = (path) => {
@@ -86,50 +101,85 @@ const Sidebar = ({ open, onClose }) => {
     <Drawer anchor="left" open={open} onClose={onClose}>
       <Box
         sx={{
-          width: 280,
+          width: { xs: 296, sm: 312 },
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          bgcolor: '#fffaf0',
         }}
       >
         {/* Header */}
-        <Box sx={{ p: 2, bgcolor: '#6f4e37', color: '#fff' }}>
+        <Box
+          sx={{
+            p: 2.5,
+            background: 'linear-gradient(135deg, #3c2d0c 0%, #725614 72%, #92701c 100%)',
+            color: '#fff',
+            minHeight: 136,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: '13px',
+              bgcolor: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              mb: 1.5,
+            }}
+          >
+            <RestaurantMenuIcon sx={{ fontSize: 21, color: '#f3d8ad' }} />
+          </Box>
           <Typography
             variant="h6"
             sx={{
               fontFamily: "'Playfair Display', serif",
               fontWeight: 700,
+              lineHeight: 1.1,
             }}
           >
-            ☕ Maná Corner
+            Maná Corner
           </Typography>
-          <Typography variant="caption" sx={{ opacity: 0.8 }}>
-            {user?.role.toUpperCase()} DASHBOARD
+          <Typography variant="caption" sx={{ opacity: 0.74, fontStyle: 'italic' }}>
+            Something to Eat
+          </Typography>
+          <Typography variant="overline" display="block" sx={{ opacity: 0.57, mt: 1.25, lineHeight: 1 }}>
+            {user?.role} workspace
           </Typography>
         </Box>
 
         <Divider />
 
         {/* Navigation Items */}
-        <List sx={{ flex: 1, py: 2 }}>
+        <List sx={{ flex: 1, py: 2, px: 1.25 }}>
           {allItems.map((item) => (
-            <ListItem key={item.path} disablePadding>
+            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 onClick={() => handleNavigation(item.path)}
                 selected={isActive(item.path)}
                 sx={{
-                  bgcolor: isActive(item.path) ? '#f5f3f0' : 'transparent',
-                  borderLeft: isActive(item.path) ? '4px solid #6f4e37' : 'none',
-                  paddingLeft: isActive(item.path) ? '12px' : '16px',
+                  borderRadius: 2.5,
+                  minHeight: 48,
+                  bgcolor: isActive(item.path) ? '#f8edc7' : 'transparent',
+                  borderLeft: isActive(item.path) ? '3px solid #b1841e' : '3px solid transparent',
+                  paddingLeft: '13px',
                   '&:hover': {
-                    bgcolor: '#fafaf9',
+                    bgcolor: '#fbf4dc',
+                  },
+                  '&.Mui-selected': {
+                    bgcolor: '#f8edc7',
+                    '&:hover': { bgcolor: '#f2e3ae' },
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    color: isActive(item.path) ? '#6f4e37' : 'inherit',
-                    minWidth: 40,
+                    color: isActive(item.path) ? '#86600d' : '#86796d',
+                    minWidth: 42,
                   }}
                 >
                   {item.badge ? (
@@ -145,7 +195,8 @@ const Sidebar = ({ open, onClose }) => {
                   sx={{
                     '& .MuiTypography-root': {
                       fontWeight: isActive(item.path) ? 600 : 500,
-                      color: isActive(item.path) ? '#6f4e37' : 'inherit',
+                      color: isActive(item.path) ? '#5a4311' : '#51483f',
+                      fontSize: '0.92rem',
                     },
                   }}
                 />
@@ -157,12 +208,12 @@ const Sidebar = ({ open, onClose }) => {
         <Divider />
 
         {/* Footer Info */}
-        <Box sx={{ p: 2, bgcolor: '#f5f3f0', fontSize: '0.8rem', color: '#888' }}>
+        <Box sx={{ p: 2, bgcolor: '#fbf4dc', fontSize: '0.8rem', color: '#887a6e' }}>
           <Typography variant="caption">
-            Domain: www.manácorner.com
+            Website: www.manàcorner.com
           </Typography>
           <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-            © 2026 Maná Corner Cafe
+            © 2026 Maná Corner
           </Typography>
         </Box>
       </Box>

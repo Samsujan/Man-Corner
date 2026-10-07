@@ -1,410 +1,60 @@
-# 🎯 SETUP & INSTALLATION GUIDE
+# Installation and Hosting — Maná Corner
 
-## 📍 Project Location
-```
-C:\Users\SAMSUJAN\mana-corner\
-```
+## Requirements
 
----
+- Node.js 20 or newer and npm
+- A Supabase project with database and Storage enabled
+- Render (API) and Vercel (frontend) accounts for the documented deployment path
 
-## 🚀 Getting Started (Choose One Method)
+## Prepare Supabase
 
-### Method 1: Docker (Easiest - Recommended)
+1. Create a Supabase project. Keeping Maná Corner in a separate project from unrelated applications makes access and backups easier to manage.
+2. Run [`supabase/migrations/202609260001_mana_corner.sql`](./supabase/migrations/202609260001_mana_corner.sql) in the Supabase SQL Editor.
+3. Copy the project URL and service-role key from **Project Settings → API**. The backend uses this key to access the database and private receipt bucket. It must never be included in the frontend bundle.
 
-```bash
-# Prerequisites
-# - Docker Desktop installed (https://www.docker.com/products/docker-desktop)
-# - Docker Compose included with Docker Desktop
+## Run locally
 
-# Step 1: Navigate to project
-cd C:\Users\SAMSUJAN\mana-corner
+1. Copy `.env.example` to `.env` and set:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `CLIENT_ORIGIN=http://localhost:3000`
+   - `JWT_SECRET` and `OWNER_SETUP_KEY` as different, randomly generated secrets (32+ characters each)
+2. Install backend and frontend packages:
 
-# Step 2: Start all services
-docker-compose up -d
-
-# Step 3: Wait for services to start (2-3 minutes)
-docker-compose logs -f
-
-# Step 4: Open in browser
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:5000/api/health
-# MongoDB: localhost:27017
-
-# Step 5: Stop when done
-docker-compose down
-```
-
----
-
-### Method 2: Manual Installation (Development)
-
-#### Prerequisites
-- Node.js 14+ (https://nodejs.org/)
-- MongoDB 4.4+ (https://www.mongodb.com/try/download/community)
-- Git
-
-#### Step 1: Install MongoDB
-
-**Windows:**
-1. Download from: https://www.mongodb.com/try/download/community
-2. Run installer (msiexec.exe)
-3. Follow installation wizard
-4. MongoDB runs as Windows Service automatically
-
-**Verify Installation:**
-```bash
-mongod --version
-```
-
-#### Step 2: Navigate to Project
-```bash
-cd C:\Users\SAMSUJAN\mana-corner
-```
-
-#### Step 3: Install Backend Dependencies
-```bash
-npm install
-```
-
-#### Step 4: Configure Environment
-```bash
-# File: .env (already created)
-MONGODB_URI=mongodb://localhost:27017/mana-corner
-JWT_SECRET=dev_secret_key_123
-PORT=5000
-NODE_ENV=development
-```
-
-#### Step 5: Install Frontend Dependencies
-```bash
-cd client
-npm install
-cd ..
-```
-
-#### Step 6: Start Backend (Terminal 1)
-```bash
-npm run server
-# Output should show:
-# ✅ MongoDB Connected
-# 🚀 Server running on port 5000
-```
-
-#### Step 7: Start Frontend (Terminal 2)
-```bash
-cd client
-npm start
-# Automatically opens browser at http://localhost:3000
-```
-
----
-
-## 🔐 First Login
-
-### Initial Setup
-
-1. **Register First Owner Account**
-   - Go to http://localhost:3000
-   - Click "Sign Up"
-   - Fill form:
-     ```
-     Name: Your Name
-     Email: owner1@manacorner.com
-     Password: Owner@123
-     Role: Owner
-     ```
-   - Click "Sign Up"
-   - You'll be logged in automatically
-
-2. **Create Additional Users** (Optional)
-   - Logout (User menu → Logout)
-   - Sign up with new email/role
-   - Repeat for all desired accounts
-
----
-
-## 📝 Verification Checklist
-
-After starting the application:
-
-- [ ] Frontend loads at http://localhost:3000
-- [ ] Backend API responds at http://localhost:5000/api/health
-- [ ] Can register a new account
-- [ ] Can login with created account
-- [ ] Dashboard shows (0 values initially)
-- [ ] Sidebar menu visible with navigation options
-- [ ] Can navigate to Billing page
-- [ ] Can add menu items (Owner only)
-- [ ] Can create expenses (Owner only)
-
----
-
-## 🛠️ Project Structure
-
-```
-mana-corner/                    # Root folder
-├── server/                     # Backend (Node.js)
-│   ├── models/                # Database schemas (5 files)
-│   ├── routes/                # API endpoints (6 files)
-│   ├── middleware/            # Auth middleware
-│   └── index.js              # Express server
-├── client/                     # Frontend (React)
-│   ├── public/                # Static HTML
-│   ├── src/
-│   │   ├── components/        # Reusable components (4 files)
-│   │   ├── pages/             # Page components (5 files)
-│   │   ├── store/             # Redux store (2 files)
-│   │   ├── utils/             # Helpers (1 file)
-│   │   └── App.js             # Main component
-│   └── package.json           # Frontend dependencies
-├── uploads/                    # File storage (for expenses)
-├── .env                        # Environment variables
-├── package.json               # Backend dependencies
-├── docker-compose.yml         # Docker orchestration
-├── Dockerfile                 # Backend container config
-├── README.md                  # Main documentation
-├── COMPLETE_DOCUMENTATION.md  # Detailed docs
-├── PROJECT_SUMMARY.md         # What's built
-└── QUICKSTART.md              # This guide
-```
-
----
-
-## 🚪 Access Points
-
-| Component | URL/Port | Purpose |
-|-----------|----------|---------|
-| Frontend | http://localhost:3000 | User interface |
-| Backend API | http://localhost:5000 | REST API |
-| MongoDB | localhost:27017 | Database |
-| MongoDB Compass | localhost:27017 | DB GUI (optional) |
-
----
-
-## 📊 Database Schema (MongoDB)
-
-Collections automatically created:
-
-1. **users** - User accounts
-2. **menuitems** - Menu items with pricing
-3. **bills** - Transaction records
-4. **expenses** - Expense entries
-5. **profitshares** - Profit distribution records
-
----
-
-## 🔧 Troubleshooting
-
-### Issue: Port 5000 Already in Use
-
-**Windows:**
-```bash
-# Find process using port 5000
-netstat -ano | findstr :5000
-
-# Kill process (replace PID with actual PID)
-taskkill /PID <PID> /F
-
-# Or change PORT in .env
-PORT=5001
-```
-
-### Issue: MongoDB Connection Error
-
-```bash
-# Check MongoDB service
-# Windows: Services app → Look for "MongoDB Server"
-# If not running: net start MongoDB
-# Or use MongoDB shell to verify:
-mongosh
-# Should connect successfully
-```
-
-### Issue: Dependencies Not Installing
-
-```bash
-# Clear npm cache
-npm cache clean --force
-
-# Delete node_modules
-rmdir /s node_modules
-
-# Reinstall
-npm install
-```
-
-### Issue: Frontend Shows Blank Page
-
-```bash
-# Clear browser cache
-# Close browser and reopen
-# Check console for errors (F12 → Console tab)
-```
-
-### Issue: Cannot Login
-
-1. Check if backend is running (see terminal)
-2. Check if MongoDB has data (might need to register first)
-3. Verify credentials are correct
-4. Check browser console for errors (F12)
-
----
-
-## 📱 Testing the Application
-
-### Create Sample Data
-
-1. **Add Menu Items** (as Owner)
-   - Go to Menu Management
-   - Add items with prices
-
-2. **Create Bills** (as Guest/Owner)
-   - Go to Billing
-   - Select items
-   - Complete bill
-
-3. **Log Expenses** (as Owner)
-   - Go to Expenses
-   - Add expense entries
-
-4. **View Analytics** (as Owner)
-   - Go to Analytics
-   - See calculated P&L and forecasts
-
----
-
-## 🚀 Production Deployment
-
-### Before Going Live
-
-1. **Update Environment Variables**
-   ```
-   JWT_SECRET=your_super_secure_secret_key
-   NODE_ENV=production
-   MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/mana-corner
+   ```powershell
+   npm install
+   Set-Location client
+   npm install
    ```
 
-2. **Set Up MongoDB Atlas**
-   - Go to https://www.mongodb.com/cloud/atlas
-   - Create cluster
-   - Get connection string
-   - Update in .env
+3. Start the API from the repository root with `npm run server`.
+4. Start the frontend from the `client` directory with `npm start`.
+5. Confirm `http://localhost:5000/api/health` returns `{"status":"ok"}` and open `http://localhost:3000`.
+6. Sign up the first owner using `OWNER_SETUP_KEY`. Later public sign-ups are restricted to billing-only guest permissions. Use the owner-only user management API to assign owner access to the other owner accounts.
 
-3. **Configure SSL/HTTPS**
-   - Get certificate from Let's Encrypt
-   - Configure in server
+## Deploy the API to Render
 
-4. **Deploy**
-   - Heroku: `heroku create && git push heroku master`
-   - AWS/DigitalOcean: Use Docker images
-   - Render: Push to GitHub and connect
+1. Create a Render Web Service from this repository and use the included `render.yaml` blueprint (or set the same build and start commands: `npm install` and `npm start`).
+2. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `CLIENT_ORIGIN` in the Render service environment. `CLIENT_ORIGIN` must be the exact HTTPS frontend origin; do not add a trailing path.
+3. Generate distinct secure values for `JWT_SECRET` and `OWNER_SETUP_KEY`. Store both only as Render secrets.
+4. Wait for `/api/health` to report healthy.
 
----
+## Deploy the frontend to Vercel
 
-## 📞 Support
+1. Import the repository and set the project root directory to `client`.
+2. Set `REACT_APP_API_URL` to `https://<render-service-host>/api`.
+3. Add `www.manácorner.com` in Vercel's domain settings, then configure the DNS records Vercel provides. Also configure the apex domain if desired.
+4. Use the exact deployed frontend origin in Render's `CLIENT_ORIGIN`, then redeploy the API.
 
-### Documentation
-- Main Docs: `README.md`
-- Detailed Docs: `COMPLETE_DOCUMENTATION.md`
-- Project Summary: `PROJECT_SUMMARY.md`
+## Security and operational notes
 
-### Common Tasks
+- `.env` is ignored by Git. Do not commit secrets or expose the Supabase service-role key to browsers.
+- The database migration enables row-level security without public table policies; only the server's service-role client accesses the cafe tables.
+- Expense receipts live in a private Storage bucket and are returned to owners as one-hour signed URLs.
+- The first owner setup key can only bootstrap one initial owner; subsequent account role changes require an authenticated owner. The database enforces a maximum of three owners, two billing guests, and at least one remaining owner.
+- The migration creates new Supabase tables. It does not migrate any existing MongoDB records.
+- Take regular Supabase backups and rotate secrets if they are exposed.
 
-**Resetting Database:**
-```bash
-# Stop application
-# Delete local MongoDB data or drop database
-# Restart application
-```
+## Docker (optional local development)
 
-**Viewing Server Logs:**
-```bash
-# Terminal running server will show logs
-# For Docker: docker-compose logs backend
-```
-
-**Accessing MongoDB:**
-```bash
-# Using MongoDB Compass (GUI)
-# URL: mongodb://localhost:27017
-
-# Or using mongosh (CLI)
-mongosh
-use mana-corner
-```
-
----
-
-## ✅ Quick Verification
-
-Run these commands to verify installation:
-
-```bash
-# Check Node.js version
-node --version  # Should be 14+
-
-# Check npm version
-npm --version
-
-# Check MongoDB
-mongod --version
-
-# Check Git
-git --version
-
-# Navigate to project
-cd C:\Users\SAMSUJAN\mana-corner
-
-# Check structure
-ls  # Should show server, client, .env, package.json, etc.
-```
-
----
-
-## 🎉 You're Ready!
-
-Once setup is complete:
-
-1. ✅ Backend running on port 5000
-2. ✅ Frontend running on port 3000
-3. ✅ Database connected
-4. ✅ Can login and use all features
-5. ✅ Ready for data entry
-
-**Start with:** http://localhost:3000
-
----
-
-## 📌 Important Folders
-
-| Folder | Purpose |
-|--------|---------|
-| `server/` | Backend API code |
-| `client/src/` | Frontend React code |
-| `uploads/` | User file uploads (expenses) |
-| `node_modules/` | Dependencies (auto-generated) |
-
----
-
-## 🔄 Daily Operations
-
-### Starting the App
-```bash
-cd C:\Users\SAMSUJAN\mana-corner
-docker-compose up -d          # or npm run dev for manual setup
-```
-
-### Stopping the App
-```bash
-docker-compose down            # or Ctrl+C in terminals
-```
-
-### Backing Up Data
-```bash
-# MongoDB backup
-mongodump --uri="mongodb://localhost:27017/mana-corner" --out=./backup
-```
-
----
-
-**Setup Complete! Happy Cafe Management! ☕**
+After configuring `.env`, run `docker compose up --build`. The UI is available at `http://localhost:3000` and the API at `http://localhost:5000`. Docker Compose no longer starts a MongoDB service.

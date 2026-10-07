@@ -10,39 +10,63 @@ import SignUp from './components/SignUp';
 // Pages
 import Dashboard from './pages/Dashboard';
 import Billing from './pages/Billing';
+import Directory from './pages/Directory';
 import Expenses from './pages/Expenses';
 import Analytics from './pages/Analytics';
 import ProfitShare from './pages/ProfitShare';
+import Users from './pages/Users';
+import MenuManagement from './pages/MenuManagement';
+import CustomerMenu from './pages/CustomerMenu';
 
 import { Box } from '@mui/material';
 
+const OwnerOnly = ({ user, children }) => (
+  user?.role === 'owner' ? children : <Navigate to="/dashboard" replace />
+);
+
+const ExpensesAccess = ({ user, children }) => (
+  user?.role === 'owner' || user?.email?.toLowerCase() === 'matamsamsujanp@gmail.com'
+    ? children
+    : <Navigate to="/billing" replace />
+);
+
 function App() {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
   const [showSignUp, setShowSignUp] = useState(false);
 
   if (!isAuthenticated) {
     return (
       <Router>
-        {showSignUp ? (
-          <SignUp onLoginClick={() => setShowSignUp(false)} />
-        ) : (
-          <Login onSignUpClick={() => setShowSignUp(true)} />
-        )}
+        <Routes>
+          <Route path="/customer-menu" element={<CustomerMenu />} />
+          <Route
+            path="*"
+            element={showSignUp ? (
+              <SignUp onLoginClick={() => setShowSignUp(false)} />
+            ) : (
+              <Login onSignUpClick={() => setShowSignUp(true)} />
+            )}
+          />
+        </Routes>
       </Router>
     );
   }
 
   return (
     <Router>
-      <Box sx={{ bgcolor: '#f5f3f0', minHeight: '100vh' }}>
+      <Box sx={{ minHeight: '100vh' }}>
         <Navbar />
         <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/customer-menu" element={<CustomerMenu />} />
+          <Route path="/dashboard" element={<OwnerOnly user={user}><Dashboard /></OwnerOnly>} />
           <Route path="/billing" element={<Billing />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/profit-share" element={<ProfitShare />} />
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/directory" element={<OwnerOnly user={user}><Directory /></OwnerOnly>} />
+          <Route path="/expenses" element={<ExpensesAccess user={user}><Expenses /></ExpensesAccess>} />
+          <Route path="/analytics" element={<OwnerOnly user={user}><Analytics /></OwnerOnly>} />
+          <Route path="/profit-share" element={<OwnerOnly user={user}><ProfitShare /></OwnerOnly>} />
+          <Route path="/users" element={<OwnerOnly user={user}><Users /></OwnerOnly>} />
+          <Route path="/menu" element={<OwnerOnly user={user}><MenuManagement /></OwnerOnly>} />
+          <Route path="/" element={<Navigate to={user?.role === 'owner' ? '/dashboard' : '/billing'} replace />} />
         </Routes>
       </Box>
     </Router>

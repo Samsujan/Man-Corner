@@ -11,10 +11,6 @@ import {
   Typography,
   Alert,
   Link,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
 } from '@mui/material';
 import CoffeeIcon from '@mui/icons-material/LocalCafe';
 
@@ -23,8 +19,8 @@ const SignUp = ({ onLoginClick }) => {
     name: '',
     email: '',
     password: '',
-    role: 'guest',
   });
+  const [ownerSetupKey, setOwnerSetupKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
@@ -40,7 +36,9 @@ const SignUp = ({ onLoginClick }) => {
     setLoading(true);
 
     try {
-      const response = await API.post('/auth/register', formData);
+      const response = await API.post('/auth/register', formData, {
+        headers: ownerSetupKey ? { 'x-owner-setup-key': ownerSetupKey } : {},
+      });
       dispatch(setAuth(response.data));
       window.location.href = '/dashboard';
     } catch (err) {
@@ -51,42 +49,62 @@ const SignUp = ({ onLoginClick }) => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          bgcolor: '#f5f3f0',
-        }}
-      >
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        px: 2,
+        py: 4,
+        background: 'radial-gradient(circle at top left, #f8f2ec 0%, #ede2d4 45%, #e3d2bb 100%)',
+      }}
+    >
+      <Container maxWidth="sm">
         <Card
           sx={{
-            padding: 4,
+            padding: { xs: 3, sm: 5 },
             width: '100%',
-            boxShadow: '0 8px 32px rgba(111, 78, 55, 0.15)',
-            borderRadius: '16px',
+            boxShadow: '0 20px 60px rgba(74, 49, 32, 0.2)',
+            borderRadius: '24px',
+            border: '1px solid rgba(212, 165, 116, 0.35)',
           }}
         >
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <CoffeeIcon sx={{ fontSize: 48, color: '#6f4e37', mb: 2 }} />
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Box
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 72,
+                height: 72,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)',
+                mb: 2,
+                boxShadow: '0 8px 24px rgba(111, 78, 55, 0.35)',
+              }}
+            >
+              <CoffeeIcon sx={{ fontSize: 36, color: '#f8f2ec' }} />
+            </Box>
             <Typography
               variant="h3"
               sx={{
                 fontFamily: "'Playfair Display', serif",
-                color: '#6f4e37',
+                color: '#4a3120',
                 fontWeight: 700,
-                mb: 1,
+                mb: 0.5,
               }}
             >
-              Join Maná Corner
+              Maná Corner
+            </Typography>
+            <Typography variant="body1" sx={{ color: '#a3846b', fontStyle: 'italic' }}>
+              Something to Eat
             </Typography>
           </Box>
 
           <form onSubmit={handleSignUp}>
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
 
             <TextField
               fullWidth
@@ -120,18 +138,15 @@ const SignUp = ({ onLoginClick }) => {
               required
             />
 
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Role</InputLabel>
-              <Select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                label="Role"
-              >
-                <MenuItem value="owner">Owner</MenuItem>
-                <MenuItem value="guest">Guest (Billing Only)</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              label="First owner setup key (leave blank for billing account)"
+              type="password"
+              value={ownerSetupKey}
+              onChange={(event) => setOwnerSetupKey(event.target.value)}
+              margin="normal"
+              autoComplete="off"
+            />
 
             <Button
               fullWidth
@@ -139,8 +154,9 @@ const SignUp = ({ onLoginClick }) => {
               sx={{
                 mt: 3,
                 py: 1.5,
-                bgcolor: '#6f4e37',
-                '&:hover': { bgcolor: '#4a3120' },
+                fontSize: '1rem',
+                background: 'linear-gradient(135deg, #6f4e37 0%, #4a3120 100%)',
+                '&:hover': { background: 'linear-gradient(135deg, #5c3f2c 0%, #3a2718 100%)' },
               }}
               type="submit"
               disabled={loading}
@@ -161,8 +177,8 @@ const SignUp = ({ onLoginClick }) => {
             </Typography>
           </Box>
         </Card>
-      </Box>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 
