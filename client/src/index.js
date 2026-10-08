@@ -9,18 +9,18 @@ import CssBaseline from '@mui/material/CssBaseline';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#68462f',
-      light: '#98745b',
-      dark: '#392719',
+      main: '#9b7015',
+      light: '#c59a32',
+      dark: '#60450d',
     },
     secondary: {
-      main: '#c89a62',
-      light: '#e2c49b',
-      dark: '#9e7040',
+      main: '#d3ad35',
+      light: '#efd878',
+      dark: '#9a7417',
     },
     background: {
-      default: '#f7f4ef',
-      paper: '#fffdfa',
+      default: '#fff9e8',
+      paper: '#fffdf4',
     },
     success: {
       main: '#54745c',
@@ -69,13 +69,13 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          border: '1px solid rgba(104, 70, 47, 0.08)',
+          border: '1px solid rgba(146, 111, 25, 0.12)',
           borderRadius: 20,
-          backgroundImage: 'linear-gradient(145deg, #fffefa 0%, #fffdfa 70%, #fbf7f1 100%)',
-          boxShadow: '0 8px 28px rgba(57, 39, 25, 0.055)',
+          backgroundImage: 'linear-gradient(145deg, #fffef9 0%, #fffdf4 70%, #fbf4dc 100%)',
+          boxShadow: '0 8px 28px rgba(80, 61, 16, 0.06)',
           transition: 'transform 180ms ease, box-shadow 180ms ease',
           '&:hover': {
-            boxShadow: '0 14px 36px rgba(57, 39, 25, 0.09)',
+            boxShadow: '0 14px 36px rgba(80, 61, 16, 0.1)',
           },
         },
       },
@@ -84,7 +84,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          borderColor: 'rgba(104, 70, 47, 0.09)',
+          borderColor: 'rgba(146, 111, 25, 0.12)',
         },
         rounded: {
           borderRadius: 18,
@@ -111,12 +111,12 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
-          backgroundColor: '#fffefa',
+          backgroundColor: '#fffdf4',
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(104, 70, 47, 0.17)',
+            borderColor: 'rgba(146, 111, 25, 0.2)',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#98745b',
+            borderColor: '#c59a32',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderWidth: 1.5,
@@ -135,14 +135,14 @@ const theme = createTheme({
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: '#f6f1e9',
+          backgroundColor: '#f8efcf',
           '& .MuiTableCell-root': {
-            color: '#6b5745',
+            color: '#705b1a',
             fontSize: '0.72rem',
             fontWeight: 700,
             letterSpacing: '0.055em',
             textTransform: 'uppercase',
-            borderBottom: '1px solid rgba(104, 70, 47, 0.1)',
+            borderBottom: '1px solid rgba(146, 111, 25, 0.16)',
             whiteSpace: 'nowrap',
           },
         },
@@ -151,7 +151,7 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderColor: 'rgba(104, 70, 47, 0.08)',
+          borderColor: 'rgba(146, 111, 25, 0.1)',
           paddingTop: 13,
           paddingBottom: 13,
         },
@@ -160,42 +160,42 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          border: '1px solid rgba(104, 70, 47, 0.1)',
-          boxShadow: '0 24px 80px rgba(57, 39, 25, 0.2)',
+          border: '1px solid rgba(146, 111, 25, 0.14)',
+          boxShadow: '0 24px 80px rgba(80, 61, 16, 0.2)',
         },
       },
     },
     MuiTabs: {
       styleOverrides: {
         root: {
-          borderBottom: '1px solid rgba(104, 70, 47, 0.1)',
+          borderBottom: '1px solid rgba(146, 111, 25, 0.14)',
         },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundImage: 'linear-gradient(110deg, #392719 0%, #68462f 60%, #79583c 100%)',
+          backgroundImage: 'linear-gradient(110deg, #3c2d0c 0%, #725614 60%, #92701c 100%)',
         },
       },
     },
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: '#f7f4ef',
+          backgroundColor: '#fff9e8',
           backgroundImage:
-            'radial-gradient(ellipse at 12% 0%, rgba(216, 190, 157, 0.18), transparent 34%), radial-gradient(ellipse at 92% 8%, rgba(104, 70, 47, 0.05), transparent 28%)',
+            'radial-gradient(ellipse at 12% 0%, rgba(244, 213, 119, 0.23), transparent 34%), radial-gradient(ellipse at 92% 8%, rgba(179, 139, 35, 0.07), transparent 28%)',
           backgroundAttachment: 'fixed',
         },
         '::selection': {
-          backgroundColor: 'rgba(200, 154, 98, 0.32)',
+          backgroundColor: 'rgba(211, 173, 53, 0.35)',
         },
         '*::-webkit-scrollbar': {
           width: 8,
           height: 8,
         },
         '*::-webkit-scrollbar-thumb': {
-          backgroundColor: 'rgba(104, 70, 47, 0.23)',
+          backgroundColor: 'rgba(146, 111, 25, 0.28)',
           borderRadius: 8,
         },
       },

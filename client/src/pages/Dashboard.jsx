@@ -63,7 +63,7 @@ const Dashboard = () => {
           position: 'relative',
           color: '#fff',
           border: 'none',
-          background: 'linear-gradient(112deg, #392719 0%, #68462f 58%, #8a6747 100%)',
+          background: 'linear-gradient(112deg, #3c2d0c 0%, #725614 58%, #98751e 100%)',
           boxShadow: '0 16px 40px rgba(57, 39, 25, 0.16)',
           '&:hover': { boxShadow: '0 16px 40px rgba(57, 39, 25, 0.16)' },
           '&::after': {

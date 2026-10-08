@@ -55,6 +55,8 @@ const syncMonthlyExpense = async (fixedCost, userId) => {
       date: new Date().toISOString(),
       payment_method: 'Online',
       created_by: userId,
+      owner_id: userId,
+      entry_type: 'expense',
       fixed_cost_id: fixedCost.id,
       cost_month: costMonth
     });

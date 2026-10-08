@@ -43,7 +43,7 @@ const Navbar = () => {
       <AppBar
         position="sticky"
         sx={{
-          background: 'linear-gradient(110deg, #392719 0%, #68462f 60%, #79583c 100%)',
+          background: 'linear-gradient(110deg, #3c2d0c 0%, #725614 60%, #92701c 100%)',
           boxShadow: '0 8px 24px rgba(57, 39, 25, 0.18)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
         }}

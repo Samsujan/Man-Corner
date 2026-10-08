@@ -19,8 +19,13 @@ import MenuManagement from './pages/MenuManagement';
 
 import { Box } from '@mui/material';
 
+const OwnerOnly = ({ user, children }) => (
+  user?.role === 'owner' ? children : <Navigate to="/billing" replace />
+);
+const investmentManagerEmail = 'matamsamsujanp@gmail.com';
+
 function App() {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
   const [showSignUp, setShowSignUp] = useState(false);
 
   if (!isAuthenticated) {
@@ -40,15 +45,20 @@ function App() {
       <Box sx={{ minHeight: '100vh' }}>
         <Navbar />
         <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<OwnerOnly user={user}><Dashboard /></OwnerOnly>} />
           <Route path="/billing" element={<Billing />} />
-          <Route path="/directory" element={<Directory />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/profit-share" element={<ProfitShare />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/menu" element={<MenuManagement />} />
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/directory" element={<OwnerOnly user={user}><Directory /></OwnerOnly>} />
+          <Route
+            path="/expenses"
+            element={user?.role === 'owner' || user?.email?.toLowerCase() === investmentManagerEmail
+              ? <Expenses />
+              : <Navigate to="/billing" replace />}
+          />
+          <Route path="/analytics" element={<OwnerOnly user={user}><Analytics /></OwnerOnly>} />
+          <Route path="/profit-share" element={<OwnerOnly user={user}><ProfitShare /></OwnerOnly>} />
+          <Route path="/users" element={<OwnerOnly user={user}><Users /></OwnerOnly>} />
+          <Route path="/menu" element={<OwnerOnly user={user}><MenuManagement /></OwnerOnly>} />
+          <Route path="/" element={<Navigate to={user?.role === 'owner' ? '/dashboard' : '/billing'} replace />} />
         </Routes>
       </Box>
     </Router>

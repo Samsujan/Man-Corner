@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 const paymentMethods = ['Cash', 'Card', 'UPI', 'Online'];
+const parcelChargePerItem = 10;
 
 const getLegacyTokenNumber = (billNumber = '') => {
   const digits = String(billNumber).replace(/\D/g, '');
@@ -33,6 +34,9 @@ const expandBill = (bill, usersById, menuById) => ({
   paymentMethod: bill.payment_method,
   subtotal: Number(bill.subtotal),
   totalGST: Number(bill.total_gst),
+  parcelCharge: (bill.items || [])
+    .filter(item => item.isParcelCharge)
+    .reduce((sum, item) => sum + Number(item.totalAmount || 0), 0),
   total: Number(bill.total),
   createdBy: usersById[bill.created_by] || null,
   items: (bill.items || []).map(item => ({
@@ -41,13 +45,13 @@ const expandBill = (bill, usersById, menuById) => ({
     gstRate: Number(item.gstRate),
     gstAmount: Number(item.gstAmount),
     totalAmount: Number(item.totalAmount),
-    menuItem: {
+    menuItem: item.menuItem ? {
       ...(menuById[item.menuItem] || {}),
       _id: item.menuItem,
       name: item.name || menuById[item.menuItem]?.name,
       price: Number(item.price),
       gstRate: Number(item.gstRate)
-    }
+    } : null
   }))
 });
 
@@ -59,7 +63,8 @@ router.post('/', authMiddleware, async (req, res) => {
         items.some(item => !item || typeof item.menuItemId !== 'string' ||
           !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.menuItemId) ||
           !Number.isInteger(Number(item.quantity)) ||
-          Number(item.quantity) < 1 || Number(item.quantity) > 99)) {
+          Number(item.quantity) < 1 || Number(item.quantity) > 99 ||
+          (item.serviceType !== undefined && !['dine-in', 'take-away'].includes(item.serviceType)))) {
       return res.status(400).json({ error: 'Provide valid bill items and a supported payment method' });
     }
 
@@ -77,6 +82,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const billItems = items.map(item => {
       const menuItem = menuById[item.menuItemId];
       const quantity = Number(item.quantity);
+      const serviceType = item.serviceType || 'dine-in';
       const price = Number(menuItem.price);
       const gstRate = Number(menuItem.gst_rate);
       const totalAmount = Number((price * quantity).toFixed(2));
@@ -89,12 +95,32 @@ router.post('/', authMiddleware, async (req, res) => {
         gstRate,
         gstAmount,
         totalAmount,
+        serviceType,
         gstIncluded: true
       };
     });
-    const subtotal = Number(billItems.reduce((sum, item) => sum + item.totalAmount - item.gstAmount, 0).toFixed(2));
+    const parcelQuantity = billItems
+      .filter(item => item.serviceType === 'take-away')
+      .reduce((sum, item) => sum + item.quantity, 0);
+    const totalParcelCharge = Number((parcelQuantity * parcelChargePerItem).toFixed(2));
+    if (parcelQuantity > 0) {
+      billItems.push({
+        name: 'Parcel charge',
+        quantity: parcelQuantity,
+        price: parcelChargePerItem,
+        gstRate: 0,
+        gstAmount: 0,
+        totalAmount: totalParcelCharge,
+        gstIncluded: false,
+        isParcelCharge: true
+      });
+    }
+    const subtotal = Number(billItems
+      .filter(item => !item.isParcelCharge)
+      .reduce((sum, item) => sum + item.totalAmount - item.gstAmount, 0)
+      .toFixed(2));
     const totalGST = Number(billItems.reduce((sum, item) => sum + item.gstAmount, 0).toFixed(2));
-    const total = Number((subtotal + totalGST).toFixed(2));
+    const total = Number((subtotal + totalGST + totalParcelCharge).toFixed(2));
     const billNumber = `MAN-${Date.now()}-${randomBytes(3).toString('hex').toUpperCase()}`;
 
     const { data, error } = await supabase
@@ -148,7 +174,9 @@ router.get('/', authMiddleware, async (req, res) => {
     if (error) throw error;
 
     const creatorIds = [...new Set(bills.map(bill => bill.created_by).filter(Boolean))];
-    const menuItemIds = [...new Set(bills.flatMap(bill => (bill.items || []).map(item => item.menuItem)))];
+    const menuItemIds = [...new Set(bills.flatMap(bill => (bill.items || [])
+      .filter(item => item.menuItem && !item.isParcelCharge)
+      .map(item => item.menuItem)))];
     const [usersResult, menuResult] = await Promise.all([
       creatorIds.length
         ? supabase.from('mc_users').select('id, name').in('id', creatorIds)
@@ -185,8 +213,10 @@ router.get('/:id', authMiddleware, async (req, res) => {
       bill.created_by
         ? supabase.from('mc_users').select('id, name').eq('id', bill.created_by).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
-      supabase.from('mc_menu_items').select('id, name, category, price, gst_rate')
-        .in('id', (bill.items || []).map(item => item.menuItem))
+      (bill.items || []).some(item => item.menuItem && !item.isParcelCharge)
+        ? supabase.from('mc_menu_items').select('id, name, category, price, gst_rate')
+          .in('id', (bill.items || []).filter(item => item.menuItem && !item.isParcelCharge).map(item => item.menuItem))
+        : Promise.resolve({ data: [], error: null })
     ]);
     if (creatorError) throw creatorError;
     if (menuError) throw menuError;

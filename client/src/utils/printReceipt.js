@@ -37,13 +37,19 @@ const printHtmlDocument = (html) => {
     alert('Please allow pop-ups to print the bill.');
     return false;
   }
+  const startPrint = () => {
+    if (printWindow.closed) return;
+    printWindow.focus();
+    printWindow.print();
+  };
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
-  printWindow.focus();
-  printWindow.onload = () => {
-    printWindow.print();
-  };
+  if (printWindow.document.readyState === 'complete') {
+    window.setTimeout(startPrint, 0);
+  } else {
+    printWindow.addEventListener('load', startPrint, { once: true });
+  }
   return true;
 };
 
@@ -58,20 +64,27 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const halfGST = Number(bill.totalGST || 0) / 2;
+  const parcelCharge = items
+    .filter((item) => item.isParcelCharge)
+    .reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
   const tokenNumber = getBillTokenNumber(bill);
   const compactBillNumber = getCompactBillNumber(bill.billNumber);
-  const pricesIncludeGST = items.length > 0 && items.every((item) => item.gstIncluded);
+  const chargeableItems = items.filter((item) => !item.isParcelCharge);
+  const pricesIncludeGST = chargeableItems.length > 0 && chargeableItems.every((item) => item.gstIncluded);
 
-  const rows = items.map((item) => {
+  const rows = chargeableItems.map((item) => {
     const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
     const qty = Number(item.quantity || 0);
     const rate = Number(item.price || 0);
     const gstRate = Number(item.gstRate || 0);
     const gstAmount = Number(item.gstAmount || 0);
     const total = Number(item.totalAmount || rate * qty + gstAmount);
+    const serviceType = item.serviceType === 'take-away'
+      ? 'Take away'
+      : item.serviceType === 'dine-in' ? 'Dine in' : '';
     return `
       <tr>
-        <td>${name}</td>
+        <td>${name}${serviceType ? `<br /><small>${serviceType}</small>` : ''}</td>
         <td class="c">${qty}</td>
         <td class="r">${rate.toFixed(2)}</td>
         <td class="r">${gstAmount.toFixed(2)} <span class="muted">(${gstRate}%)</span></td>
@@ -152,6 +165,7 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
     <div><span>Taxable value</span><span>${formatCurrency(bill.subtotal)}</span></div>
     <div><span>CGST</span><span>${formatCurrency(halfGST)}</span></div>
     <div><span>SGST</span><span>${formatCurrency(halfGST)}</span></div>
+    ${parcelCharge > 0 ? `<div><span>Parcel charge</span><span>${formatCurrency(parcelCharge)}</span></div>` : ''}
     <div class="grand"><span>Grand Total</span><span>${formatCurrency(bill.total)}</span></div>
   </div>
   <div class="footer">Thank you! Visit again 🙏</div>
@@ -170,12 +184,15 @@ export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const tokenNumber = getBillTokenNumber(bill);
 
-  const rows = items.map((item) => {
+  const rows = items.filter((item) => !item.isParcelCharge).map((item) => {
     const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
     const qty = Number(item.quantity || 0);
+    const serviceType = item.serviceType === 'take-away'
+      ? 'TAKE AWAY'
+      : item.serviceType === 'dine-in' ? 'DINE IN' : '';
     return `
       <tr>
-        <td>${name}</td>
+        <td>${name}${serviceType ? `<br /><small>${serviceType}</small>` : ''}</td>
         <td class="c">${qty}</td>
       </tr>`;
   }).join('');

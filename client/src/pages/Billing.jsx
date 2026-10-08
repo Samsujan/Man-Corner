@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import API from '../utils/api';
 import {
   Container,
@@ -30,6 +31,8 @@ import {
   IconButton,
   InputAdornment,
   Snackbar,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -48,6 +51,57 @@ import {
   isBluetoothPrintSupported,
 } from '../utils/blePrinter';
 
+const MENU_SUBCATEGORY_RULES = {
+  Morning: [
+    ['Dosas', /dosa/i],
+    ['Poori', /poori/i],
+    ['Idlis', /idli/i],
+    ['Pongal', /pongal/i],
+  ],
+  Afternoon: [
+    ['Biryani', /biryani|kobbari anam|single cb/i],
+    ['Rice', /rice|bath|pulihora/i],
+  ],
+  'Evening Snacks': [
+    ['Maggi', /maggi/i],
+    ['Noodles', /noodles/i],
+    ['Fried Rice', /fried rice/i],
+    ['Sandwiches', /sandwich/i],
+    ['Toasts', /toast/i],
+    ['Fries', /fries/i],
+    ['Starters', /.*/],
+  ],
+  Dinner: [
+    ['Dosas', /dosa/i],
+    ['Poori', /poori/i],
+  ],
+  'All Day Items': [
+    ['Tea', /tea/i],
+    ['Coffee', /coffee/i],
+    ['Milkshakes', /milkshake/i],
+    ['Drinks', /cool drinks|water/i],
+    ['Extras', /^extra/i],
+  ],
+};
+
+const getMenuSection = (category) => {
+  const name = String(category || '').toLowerCase();
+  if (name.includes('morning') || name === 'breakfast') return 'Morning';
+  if (name.includes('afternoon') || name.includes('lunch')) return 'Afternoon';
+  if (name.includes('evening') || name.includes('snack')) return 'Evening Snacks';
+  if (name.includes('dinner')) return 'Dinner';
+  if (name.includes('all day')) return 'All Day Items';
+  return null;
+};
+
+const getItemSubcategory = (category, itemName) => {
+  const rule = MENU_SUBCATEGORY_RULES[getMenuSection(category)]?.find(([, pattern]) => pattern.test(itemName));
+  return rule?.[0] || 'Other';
+};
+
+const getCategoryLabel = (category) => category === 'Afternoon' ? 'Lunch' : category;
+const PARCEL_CHARGE = 10;
+
 const MenuItemPhoto = ({ item }) => {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -61,9 +115,9 @@ const MenuItemPhoto = ({ item }) => {
         placeItems: 'center',
         overflow: 'hidden',
         borderRadius: '15px',
-        color: '#8a6b4c',
-        bgcolor: '#f5ede2',
-        border: '1px solid rgba(104,70,47,0.08)',
+        color: '#806112',
+        bgcolor: '#fcf3d4',
+        border: '1px solid rgba(146,111,25,0.14)',
       }}
     >
       {item.image && !imageFailed ? (
@@ -90,33 +144,37 @@ const formatBillDate = (bill) => {
 };
 
 const Billing = () => {
+  const { user } = useSelector((state) => state.auth);
   const [menuItems, setMenuItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [serviceTypeDialogOpen, setServiceTypeDialogOpen] = useState(false);
+  const [pendingItem, setPendingItem] = useState(null);
+  const [selectedServiceType, setSelectedServiceType] = useState('dine-in');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [activeSubcategory, setActiveSubcategory] = useState('All');
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const [menuRes, billsRes] = await Promise.all([
-        API.get('/menu'),
-        API.get('/billing'),
-      ]);
+      const requests = [API.get('/menu')];
+      if (user?.role === 'owner') requests.push(API.get('/billing'));
+      const [menuRes, billsRes] = await Promise.all(requests);
       setMenuItems(menuRes.data);
-      setBills(billsRes.data);
+      setBills(billsRes?.data || []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.role]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const categories = useMemo(() => {
     const seen = [];
@@ -126,55 +184,85 @@ const Billing = () => {
     return ['All', ...seen];
   }, [menuItems]);
 
+  const subcategories = useMemo(() => {
+    const rules = MENU_SUBCATEGORY_RULES[getMenuSection(activeCategory)];
+    if (!rules) return [];
+    const available = new Set(
+      menuItems
+        .filter((item) => item.category === activeCategory)
+        .map((item) => getItemSubcategory(activeCategory, item.name))
+    );
+    return ['All', ...rules.map(([subcategory]) => subcategory).filter((subcategory) => available.has(subcategory))];
+  }, [menuItems, activeCategory]);
+
   const visibleItems = useMemo(() => {
     return menuItems.filter((item) => {
       const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
+      const matchesSubcategory = subcategories.length === 0 || activeSubcategory === 'All' ||
+        getItemSubcategory(activeCategory, item.name) === activeSubcategory;
       const matchesSearch = item.name.toLowerCase().includes(search.trim().toLowerCase());
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesSubcategory && matchesSearch;
     });
-  }, [menuItems, activeCategory, search]);
+  }, [menuItems, activeCategory, activeSubcategory, search, subcategories.length]);
 
-  const getQuantity = (itemId) =>
-    selectedItems.find((i) => i.menuItem._id === itemId)?.quantity || 0;
+  const getQuantity = (itemId) => selectedItems
+    .filter((selected) => selected.menuItem._id === itemId)
+    .reduce((quantity, selected) => quantity + selected.quantity, 0);
 
-  const addItemToBill = (item) => {
-    const existingItem = selectedItems.find((i) => i.menuItem._id === item._id);
+  const promptServiceType = (item) => {
+    setPendingItem(item);
+    setSelectedServiceType('dine-in');
+    setServiceTypeDialogOpen(true);
+  };
+
+  const addItemToBill = (item, serviceType) => {
+    const existingItem = selectedItems.find((selected) => (
+      selected.menuItem._id === item._id && selected.serviceType === serviceType
+    ));
     if (existingItem) {
       setSelectedItems(
         selectedItems.map((i) =>
-          i.menuItem._id === item._id ? { ...i, quantity: i.quantity + 1 } : i
+          i === existingItem ? { ...i, quantity: i.quantity + 1 } : i
         )
       );
     } else {
       setSelectedItems([
         ...selectedItems,
-        { menuItem: item, quantity: 1, gstRate: item.gstRate },
+        { menuItem: item, quantity: 1, gstRate: item.gstRate, serviceType },
       ]);
     }
   };
 
   const decrementItem = (itemId) => {
-    const existingItem = selectedItems.find((i) => i.menuItem._id === itemId);
+    const existingItem = [...selectedItems].reverse().find((i) => i.menuItem._id === itemId);
     if (!existingItem) return;
     if (existingItem.quantity <= 1) {
-      removeItemFromBill(itemId);
+      setSelectedItems(selectedItems.filter((item) => item !== existingItem));
     } else {
       setSelectedItems(
         selectedItems.map((i) =>
-          i.menuItem._id === itemId ? { ...i, quantity: i.quantity - 1 } : i
+          i === existingItem ? { ...i, quantity: i.quantity - 1 } : i
         )
       );
     }
   };
 
-  const removeItemFromBill = (itemId) => {
-    setSelectedItems(selectedItems.filter((i) => i.menuItem._id !== itemId));
+  const removeItemFromBill = (itemId, serviceType) => {
+    setSelectedItems(selectedItems.filter((i) => (
+      i.menuItem._id !== itemId || i.serviceType !== serviceType
+    )));
   };
 
+  const getTakeawayQuantity = () => selectedItems
+    .filter((item) => item.serviceType === 'take-away')
+    .reduce((quantity, item) => quantity + item.quantity, 0);
+
+  const calculateParcelCharge = () => getTakeawayQuantity() * PARCEL_CHARGE;
+
   const calculateTotal = () => {
-    return Number(selectedItems
+    const itemsTotal = selectedItems
       .reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0)
-      .toFixed(2));
+    return Number((itemsTotal + calculateParcelCharge()).toFixed(2));
   };
 
   const calculateGST = () => {
@@ -210,6 +298,7 @@ const Billing = () => {
         items: selectedItems.map((item) => ({
           menuItemId: item.menuItem._id,
           quantity: item.quantity,
+          serviceType: item.serviceType,
         })),
         paymentMethod,
       };
@@ -305,7 +394,10 @@ const Billing = () => {
 
               <Tabs
                 value={activeCategory}
-                onChange={(event, value) => setActiveCategory(value)}
+                onChange={(event, value) => {
+                  setActiveCategory(value);
+                  setActiveSubcategory('All');
+                }}
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
@@ -318,19 +410,46 @@ const Billing = () => {
                     fontWeight: 600,
                     borderRadius: '20px',
                     mr: 1,
-                    color: '#6f4e37',
+                    color: '#806112',
                   },
                   '& .Mui-selected': {
-                    bgcolor: '#6f4e37',
+                    bgcolor: '#9b7015',
                     color: '#fff !important',
                   },
                   '& .MuiTabs-indicator': { display: 'none' },
                 }}
               >
                 {categories.map((category) => (
-                  <Tab key={category} value={category} label={category} />
+                  <Tab key={category} value={category} label={getCategoryLabel(category)} />
                 ))}
               </Tabs>
+
+              {subcategories.length > 0 && (
+                <Tabs
+                  value={activeSubcategory}
+                  onChange={(event, value) => setActiveSubcategory(value)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  allowScrollButtonsMobile
+                  aria-label="Morning item groups"
+                  sx={{
+                    mb: 2,
+                    minHeight: 32,
+                    '& .MuiTab-root': {
+                      minHeight: 32,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      color: '#806112',
+                    },
+                    '& .Mui-selected': { color: '#806112' },
+                    '& .MuiTabs-indicator': { backgroundColor: '#c59a32', height: 3 },
+                  }}
+                >
+                  {subcategories.map((subcategory) => (
+                    <Tab key={subcategory} value={subcategory} label={subcategory} />
+                  ))}
+                </Tabs>
+              )}
 
               <Box
                 sx={{
@@ -352,11 +471,11 @@ const Billing = () => {
                       sx={{
                         p: 1,
                         borderRadius: '16px',
-                        borderColor: quantity > 0 ? '#98745b' : 'rgba(104,70,47,0.13)',
-                        bgcolor: quantity > 0 ? '#f7f0e7' : '#fffefa',
+                        borderColor: quantity > 0 ? '#c59a32' : 'rgba(146,111,25,0.16)',
+                        bgcolor: quantity > 0 ? '#fff5d6' : '#fffdf4',
                         transition: 'border-color 160ms ease, background-color 160ms ease, transform 160ms ease',
                         '&:hover': {
-                          borderColor: '#98745b',
+                          borderColor: '#c59a32',
                           transform: 'translateY(-1px)',
                         },
                       }}
@@ -409,7 +528,7 @@ const Billing = () => {
                             size="small"
                             variant="contained"
                             startIcon={<AddIcon fontSize="small" />}
-                            onClick={() => addItemToBill(item)}
+                            onClick={() => promptServiceType(item)}
                             sx={{ bgcolor: '#68462f', borderRadius: '999px', px: 1.5, '&:hover': { bgcolor: '#503622' } }}
                           >
                             Add
@@ -428,7 +547,7 @@ const Billing = () => {
                             </Typography>
                             <IconButton
                               aria-label={`Add one ${item.name}`}
-                              onClick={() => addItemToBill(item)}
+                              onClick={() => promptServiceType(item)}
                               sx={{ width: 32, height: 32, bgcolor: '#68462f', color: '#fff', '&:hover': { bgcolor: '#503622' } }}
                             >
                               <AddIcon fontSize="small" />
@@ -479,15 +598,20 @@ const Billing = () => {
                       {selectedItems.map((item) => {
                         const itemTotal = item.menuItem.price * item.quantity;
                         return (
-                          <TableRow key={item.menuItem._id}>
-                            <TableCell>{item.menuItem.name}</TableCell>
+                          <TableRow key={`${item.menuItem._id}-${item.serviceType}`}>
+                            <TableCell>
+                              {item.menuItem.name}
+                              <Typography variant="caption" display="block" color="text.secondary">
+                                {item.serviceType === 'take-away' ? 'Take away' : 'Dine in'}
+                              </Typography>
+                            </TableCell>
                             <TableCell align="right">{item.quantity}</TableCell>
                             <TableCell align="right">₹{itemTotal.toFixed(2)}</TableCell>
                             <TableCell align="center">
                               <IconButton
                                 size="small"
                                 color="error"
-                                onClick={() => removeItemFromBill(item.menuItem._id)}
+                                onClick={() => removeItemFromBill(item.menuItem._id, item.serviceType)}
                               >
                                 <DeleteOutlineIcon fontSize="small" />
                               </IconButton>
@@ -510,6 +634,12 @@ const Billing = () => {
                       .toFixed(2)}
                   </Typography>
                 </Box>
+                {calculateParcelCharge() > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography>Take-away parcel ({getTakeawayQuantity()} × ₹{PARCEL_CHARGE}):</Typography>
+                    <Typography sx={{ fontWeight: 600 }}>₹{calculateParcelCharge().toFixed(2)}</Typography>
+                  </Box>
+                )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography>GST included:</Typography>
                   <Typography sx={{ fontWeight: 600, color: '#3498db' }}>
@@ -537,6 +667,44 @@ const Billing = () => {
           </Card>
         </Grid>
       </Grid>
+
+      <Dialog
+        open={serviceTypeDialogOpen}
+        onClose={() => setServiceTypeDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{pendingItem ? `How is ${pendingItem.name} served?` : 'Choose service type'}</DialogTitle>
+        <DialogContent>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            value={selectedServiceType}
+            onChange={(event, value) => value && setSelectedServiceType(value)}
+            sx={{ mt: 1 }}
+          >
+            <ToggleButton value="dine-in">Dine in</ToggleButton>
+            <ToggleButton value="take-away">Take away (+₹{PARCEL_CHARGE})</ToggleButton>
+          </ToggleButtonGroup>
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 3 }}>
+            <Button fullWidth variant="outlined" onClick={() => setServiceTypeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => {
+                if (pendingItem) addItemToBill(pendingItem, selectedServiceType);
+                setServiceTypeDialogOpen(false);
+                setPendingItem(null);
+              }}
+              sx={{ bgcolor: '#6f4e37' }}
+            >
+              Add item
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       {/* Billing Confirmation Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '16px' } }}>

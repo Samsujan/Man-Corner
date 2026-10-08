@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
+const expensesStartDate = '2026-10-03T00:00:00.000Z';
 
 const requireOwner = (req, res) => {
   if (req.user.role === 'owner') return true;
@@ -9,9 +10,15 @@ const requireOwner = (req, res) => {
   return false;
 };
 
-const fetchRows = async (table, dateColumn, startDate, endDate, limit) => {
+const fetchRows = async (table, dateColumn, startDate, endDate, limit, minimumDate) => {
   let query = supabase.from(table).select('*');
-  if (startDate) query = query.gte(dateColumn, startDate);
+  if (table === 'mc_expenses') query = query.eq('entry_type', 'expense');
+  if (startDate || minimumDate) {
+    const lowerBound = startDate && minimumDate
+      ? (startDate > minimumDate ? startDate : minimumDate)
+      : startDate || minimumDate;
+    query = query.gte(dateColumn, lowerBound);
+  }
   if (endDate) query = query.lte(dateColumn, endDate);
   if (limit) query = query.order(dateColumn, { ascending: false }).limit(limit);
   const { data, error } = await query;
@@ -60,7 +67,7 @@ router.get('/expenses-summary', authMiddleware, async (req, res) => {
   if (!bounds) return;
 
   try {
-    const expenses = await fetchRows('mc_expenses', 'date', bounds.startDate, bounds.endDate);
+    const expenses = await fetchRows('mc_expenses', 'date', bounds.startDate, bounds.endDate, null, expensesStartDate);
     const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
     const byCategory = {};
     expenses.forEach(expense => {
@@ -80,7 +87,7 @@ router.get('/profit-loss', authMiddleware, async (req, res) => {
   try {
     const [bills, expenses] = await Promise.all([
       fetchRows('mc_bills', 'created_at', bounds.startDate, bounds.endDate),
-      fetchRows('mc_expenses', 'date', bounds.startDate, bounds.endDate)
+      fetchRows('mc_expenses', 'date', bounds.startDate, bounds.endDate, null, expensesStartDate)
     ]);
     const revenue = bills.reduce((sum, bill) => sum + Number(bill.total) - Number(bill.total_gst), 0);
     const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
@@ -102,7 +109,7 @@ router.get('/recommendations', authMiddleware, async (req, res) => {
   if (!requireOwner(req, res)) return;
 
   try {
-    const expenses = await fetchRows('mc_expenses', 'date', null, null, 100);
+    const expenses = await fetchRows('mc_expenses', 'date', null, null, 100, expensesStartDate);
     const byCategory = {};
     expenses.forEach(expense => {
       byCategory[expense.category] = byCategory[expense.category] || { total: 0, count: 0 };
@@ -152,7 +159,8 @@ router.get('/forecast', authMiddleware, async (req, res) => {
       'date',
       new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
       null,
-      10000
+      10000,
+      expensesStartDate
     );
     const byMonth = {};
     expenses.forEach(expense => {
@@ -185,7 +193,7 @@ router.get('/budget-plan', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
     const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, now.getUTCDate()));
-    const expenses = await fetchRows('mc_expenses', 'date', lastMonth.toISOString(), now.toISOString());
+    const expenses = await fetchRows('mc_expenses', 'date', lastMonth.toISOString(), now.toISOString(), null, expensesStartDate);
     const lastMonthTotal = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
     const recommendedBuffer = lastMonthTotal * 0.2;
     res.json({
@@ -212,7 +220,7 @@ router.get('/profit-share/:month', authMiddleware, async (req, res) => {
     const endDate = new Date(Date.UTC(year, monthNumber, 1) - 1).toISOString();
     const [bills, expenses] = await Promise.all([
       fetchRows('mc_bills', 'created_at', startDate, endDate),
-      fetchRows('mc_expenses', 'date', startDate, endDate)
+      fetchRows('mc_expenses', 'date', startDate, endDate, null, expensesStartDate)
     ]);
     const revenue = bills.reduce((sum, bill) => sum + Number(bill.total) - Number(bill.total_gst), 0);
     const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);

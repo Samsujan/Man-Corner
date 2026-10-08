@@ -131,7 +131,6 @@ const buildFullReceiptBytes = (bill) => {
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const halfGST = Number(bill.totalGST || 0) / 2;
   const tokenNumber = getBillTokenNumber(bill);
-  const pricesIncludeGST = items.length > 0 && items.every((item) => item.gstIncluded);
 
   const out = startPrinterBuffer();
   out.push(...cmds.alignCenter);
@@ -157,7 +156,10 @@ const buildFullReceiptBytes = (bill) => {
     const gstAmount = Number(item.gstAmount || 0);
     const total = Number(item.totalAmount || rate * qty + (item.gstIncluded ? 0 : gstAmount));
     out.push(...textBytes(`${name}\n`));
-    out.push(...textBytes(padRow(`  ${qty} x Rs.${money(rate)}${pricesIncludeGST ? ' incl GST' : ''}`, `Rs.${money(total)}`)));
+    if (item.serviceType) {
+      out.push(...textBytes(`  ${item.serviceType === 'take-away' ? 'TAKE AWAY' : 'DINE IN'}\n`));
+    }
+    out.push(...textBytes(padRow(`  ${qty} x Rs.${money(rate)}${item.gstIncluded ? ' incl GST' : ''}`, `Rs.${money(total)}`)));
     if (gstAmount > 0) {
       out.push(...textBytes(padRow('  GST', `Rs.${money(gstAmount)}`)));
     }
@@ -200,10 +202,13 @@ const buildKitchenReceiptBytes = (bill) => {
   out.push(...textBytes(`Date: ${dateStr} ${timeStr}\n`));
   out.push(...cmds.alignLeft);
   out.push(...textBytes(divider()));
-  items.forEach((item) => {
+  items.filter((item) => !item.isParcelCharge).forEach((item) => {
     const name = item.menuItem?.name || item.name || 'Item';
     const qty = Number(item.quantity || 0);
     out.push(...textBytes(padRow(name, `x${qty}`)));
+    if (item.serviceType) {
+      out.push(...textBytes(`  ${item.serviceType === 'take-away' ? 'TAKE AWAY' : 'DINE IN'}\n`));
+    }
   });
   out.push(...textBytes(divider()));
   out.push(...cmds.alignCenter);

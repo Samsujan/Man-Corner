@@ -6,6 +6,8 @@ const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 const bucketName = 'mana-corner-receipts';
+const investmentCutoff = '2026-10-09T00:00:00.000Z';
+const investmentManagerEmail = 'matamsamsujanp@gmail.com';
 const allowedCategories = require('../constants/expenseCategories');
 const allowedPaymentMethods = ['Cash', 'Card', 'UPI', 'Online'];
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
@@ -26,8 +28,24 @@ const requireOwner = (req, res) => {
   return false;
 };
 
+const canManageInvestments = req =>
+  req.user.role === 'owner' || req.user.email?.toLowerCase() === investmentManagerEmail;
+
+const isInvestmentDate = date => new Date(date).toISOString() < investmentCutoff;
+
+const requireInvestmentAccess = (req, res) => {
+  if (canManageInvestments(req)) return true;
+  res.status(403).json({ error: 'Only owners can manage investments' });
+  return false;
+};
+
 const addSignedReceiptUrl = async expense => {
-  const result = { ...expense, _id: expense.id, amount: Number(expense.amount) };
+  const result = {
+    ...expense,
+    _id: expense.id,
+    amount: Number(expense.amount),
+    paymentMethod: expense.payment_method
+  };
   if (expense.bill_screenshot) {
     const { data, error } = await supabase.storage
       .from(bucketName)
@@ -51,7 +69,9 @@ const applyDateFilter = (query, startDate, endDate) => {
 };
 
 router.post('/', authMiddleware, upload.single('billScreenshot'), async (req, res) => {
-  if (!requireOwner(req, res)) return;
+  if (req.user.role !== 'owner' && !canManageInvestments(req)) {
+    return res.status(403).json({ error: 'Only owners can manage expenses' });
+  }
 
   let uploadedPath;
   let expenseSaved = false;
@@ -65,6 +85,30 @@ router.post('/', authMiddleware, upload.single('billScreenshot'), async (req, re
         !allowedPaymentMethods.includes(paymentMethod)) {
       return res.status(400).json({ error: 'Valid description, category, amount, date, and payment method are required' });
     }
+    const entryType = req.body.entryType || 'expense';
+    if (!['expense', 'investment'].includes(entryType)) {
+      return res.status(400).json({ error: 'Entry type must be expense or investment' });
+    }
+    const investment = entryType === 'investment';
+    if (investment && !isInvestmentDate(expenseDate)) {
+      return res.status(400).json({ error: 'Investment date must be on or before October 8, 2026' });
+    }
+    if (req.user.role !== 'owner' && !investment) {
+      return res.status(403).json({ error: 'This account can only add investments' });
+    }
+    const ownerId = req.body.ownerId || (req.user.role === 'owner' ? req.user.id : null);
+    if (!ownerId) return res.status(400).json({ error: 'Select a valid owner' });
+    if (ownerId !== req.user.id && req.user.email?.toLowerCase() !== investmentManagerEmail) {
+      return res.status(403).json({ error: 'You can only attribute entries to yourself' });
+    }
+    const { data: owner, error: ownerError } = await supabase
+      .from('mc_users')
+      .select('id')
+      .eq('id', ownerId)
+      .eq('role', 'owner')
+      .maybeSingle();
+    if (ownerError) throw ownerError;
+    if (!owner) return res.status(400).json({ error: 'Select a valid owner' });
 
     if (req.file) {
       const extension = req.file.mimetype === 'application/pdf'
@@ -89,7 +133,9 @@ router.post('/', authMiddleware, upload.single('billScreenshot'), async (req, re
         date: expenseDate.toISOString(),
         payment_method: paymentMethod,
         bill_screenshot: uploadedPath || null,
-        created_by: req.user.id
+        created_by: req.user.id,
+        owner_id: ownerId,
+        entry_type: entryType
       })
       .select('*')
       .single();
@@ -110,6 +156,122 @@ router.post('/', authMiddleware, upload.single('billScreenshot'), async (req, re
   }
 });
 
+router.get('/owners', authMiddleware, async (req, res) => {
+  if (!requireInvestmentAccess(req, res)) return;
+  try {
+    const { data, error } = await supabase
+      .from('mc_users')
+      .select('id, name, email')
+      .eq('role', 'owner')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/investments', authMiddleware, async (req, res) => {
+  if (!requireInvestmentAccess(req, res)) return;
+  try {
+    const { data: expenses, error } = await supabase
+      .from('mc_expenses')
+      .select('*')
+      .eq('entry_type', 'investment')
+      .lt('date', investmentCutoff)
+      .order('date', { ascending: false });
+    if (error) throw error;
+    const ownerIds = [...new Set(expenses.map(row => row.owner_id || row.created_by).filter(Boolean))];
+    const { data: owners, error: ownersError } = ownerIds.length
+      ? await supabase.from('mc_users').select('id, name').in('id', ownerIds)
+      : { data: [], error: null };
+    if (ownersError) throw ownersError;
+    const ownersById = Object.fromEntries(owners.map(owner => [owner.id, owner]));
+    res.json(await Promise.all(expenses.map(async row => ({
+      ...await addSignedReceiptUrl(row),
+      owner: ownersById[row.owner_id || row.created_by] || null
+    }))));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/investments/:id', authMiddleware, async (req, res) => {
+  if (!requireInvestmentAccess(req, res)) return;
+  try {
+    const { data: existing, error: findError } = await supabase
+      .from('mc_expenses')
+      .select('id, date, owner_id, created_by, entry_type')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (findError) throw findError;
+    if (!existing || existing.entry_type !== 'investment' || !isInvestmentDate(existing.date)) {
+      return res.status(404).json({ error: 'Investment not found' });
+    }
+    const existingOwnerId = existing.owner_id || existing.created_by;
+    const canEditOthers = req.user.email?.toLowerCase() === investmentManagerEmail;
+    if (req.user.role !== 'owner' && !canEditOthers) {
+      return res.status(403).json({ error: 'Only owners can update investments' });
+    }
+    if (req.user.role === 'owner' && existingOwnerId !== req.user.id && !canEditOthers) {
+      return res.status(403).json({ error: 'You can only update your own investments' });
+    }
+
+    const { description, category, amount, date, ownerId, paymentMethod } = req.body;
+    const updates = {};
+    if (description !== undefined) {
+      if (typeof description !== 'string' || !description.trim()) {
+        return res.status(400).json({ error: 'Description cannot be empty' });
+      }
+      updates.description = description.trim();
+    }
+    if (category !== undefined) {
+      if (!allowedCategories.includes(category)) return res.status(400).json({ error: 'Invalid category' });
+      updates.category = category;
+    }
+    if (amount !== undefined) {
+      if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+        return res.status(400).json({ error: 'Amount must be greater than zero' });
+      }
+      updates.amount = Number(amount);
+    }
+    if (date !== undefined) {
+      const investmentDate = new Date(date);
+      if (Number.isNaN(investmentDate.getTime()) || !isInvestmentDate(investmentDate)) {
+        return res.status(400).json({ error: 'Investment date must be on or before October 8, 2026' });
+      }
+      updates.date = investmentDate.toISOString();
+    }
+    if (paymentMethod !== undefined) {
+      if (!allowedPaymentMethods.includes(paymentMethod)) return res.status(400).json({ error: 'Invalid payment method' });
+      updates.payment_method = paymentMethod;
+    }
+    if (ownerId !== undefined) {
+      if (!canEditOthers && ownerId !== req.user.id) {
+        return res.status(403).json({ error: 'You can only attribute entries to yourself' });
+      }
+      const { data: owner, error: ownerError } = await supabase
+        .from('mc_users').select('id').eq('id', ownerId).eq('role', 'owner').maybeSingle();
+      if (ownerError) throw ownerError;
+      if (!owner) return res.status(400).json({ error: 'Select a valid owner' });
+      updates.owner_id = ownerId;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Provide at least one field to update' });
+    }
+
+    const { data, error } = await supabase
+      .from('mc_expenses').update(updates).eq('id', req.params.id).select('*').single();
+    if (error) throw error;
+    const { data: owner, error: ownerError } = await supabase
+      .from('mc_users').select('id, name').eq('id', data.owner_id || data.created_by).maybeSingle();
+    if (ownerError) throw ownerError;
+    res.json({ ...await addSignedReceiptUrl(data), owner: owner || null });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.get('/', authMiddleware, async (req, res) => {
   if (!requireOwner(req, res)) return;
 
@@ -125,6 +287,7 @@ router.get('/', authMiddleware, async (req, res) => {
     }
     if (end && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) end.setUTCHours(23, 59, 59, 999);
     let query = supabase.from('mc_expenses').select('*');
+    query = query.eq('entry_type', 'expense');
     query = applyDateFilter(query, start && start.toISOString(), end && end.toISOString());
     if (category) query = query.eq('category', category);
     const { data: expenses, error } = await query.order('date', { ascending: false });

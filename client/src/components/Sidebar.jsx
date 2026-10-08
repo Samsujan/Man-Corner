@@ -24,6 +24,7 @@ import ContactsIcon from '@mui/icons-material/Contacts';
 
 const Sidebar = ({ open, onClose }) => {
   const { user } = useSelector((state) => state.auth);
+  const isInvestmentManager = user?.email?.toLowerCase() === 'matamsamsujanp@gmail.com';
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,7 +33,7 @@ const Sidebar = ({ open, onClose }) => {
       label: 'Dashboard',
       icon: <DashboardIcon />,
       path: '/dashboard',
-      roles: ['owner', 'guest'],
+      roles: ['owner'],
     },
     {
       label: 'Billing',
@@ -45,7 +46,7 @@ const Sidebar = ({ open, onClose }) => {
       label: 'Directory',
       icon: <ContactsIcon />,
       path: '/directory',
-      roles: ['owner', 'guest'],
+      roles: ['owner'],
     },
   ];
 
@@ -85,9 +86,9 @@ const Sidebar = ({ open, onClose }) => {
     },
   ];
 
-  const allItems = [...menuItems, ...ownerOnlyItems].filter((item) =>
-    item.roles.includes(user?.role)
-  );
+  const allItems = [...menuItems, ...ownerOnlyItems].filter((item) => (
+    item.roles.includes(user?.role) || (item.path === '/expenses' && isInvestmentManager)
+  ));
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -104,14 +105,14 @@ const Sidebar = ({ open, onClose }) => {
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
-          bgcolor: '#fffdfa',
+          bgcolor: '#fffaf0',
         }}
       >
         {/* Header */}
         <Box
           sx={{
             p: 2.5,
-            background: 'linear-gradient(135deg, #392719 0%, #68462f 72%, #79583c 100%)',
+            background: 'linear-gradient(135deg, #3c2d0c 0%, #725614 72%, #92701c 100%)',
             color: '#fff',
             minHeight: 136,
             display: 'flex',
@@ -163,21 +164,21 @@ const Sidebar = ({ open, onClose }) => {
                 sx={{
                   borderRadius: 2.5,
                   minHeight: 48,
-                  bgcolor: isActive(item.path) ? '#f3ece2' : 'transparent',
-                  borderLeft: isActive(item.path) ? '3px solid #68462f' : '3px solid transparent',
+                  bgcolor: isActive(item.path) ? '#f8edc7' : 'transparent',
+                  borderLeft: isActive(item.path) ? '3px solid #b1841e' : '3px solid transparent',
                   paddingLeft: '13px',
                   '&:hover': {
-                    bgcolor: '#f8f4ee',
+                    bgcolor: '#fbf4dc',
                   },
                   '&.Mui-selected': {
-                    bgcolor: '#f3ece2',
-                    '&:hover': { bgcolor: '#eee4d8' },
+                    bgcolor: '#f8edc7',
+                    '&:hover': { bgcolor: '#f2e3ae' },
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    color: isActive(item.path) ? '#68462f' : '#86796d',
+                    color: isActive(item.path) ? '#86600d' : '#86796d',
                     minWidth: 42,
                   }}
                 >
@@ -194,7 +195,7 @@ const Sidebar = ({ open, onClose }) => {
                   sx={{
                     '& .MuiTypography-root': {
                       fontWeight: isActive(item.path) ? 600 : 500,
-                      color: isActive(item.path) ? '#503622' : '#51483f',
+                      color: isActive(item.path) ? '#5a4311' : '#51483f',
                       fontSize: '0.92rem',
                     },
                   }}
@@ -207,7 +208,7 @@ const Sidebar = ({ open, onClose }) => {
         <Divider />
 
         {/* Footer Info */}
-        <Box sx={{ p: 2, bgcolor: '#f8f4ee', fontSize: '0.8rem', color: '#887a6e' }}>
+        <Box sx={{ p: 2, bgcolor: '#fbf4dc', fontSize: '0.8rem', color: '#887a6e' }}>
           <Typography variant="caption">
             Website: www.manàcorner.com
           </Typography>
