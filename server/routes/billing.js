@@ -32,6 +32,8 @@ const expandBill = (bill, usersById, menuById) => ({
   tokenDate: bill.token_date,
   createdAt: bill.created_at,
   paymentMethod: bill.payment_method,
+  cashReceived: bill.cash_received == null ? null : Number(bill.cash_received),
+  changeDue: bill.change_due == null ? null : Number(bill.change_due),
   subtotal: Number(bill.subtotal),
   totalGST: Number(bill.total_gst),
   parcelCharge: (bill.items || [])
@@ -57,7 +59,7 @@ const expandBill = (bill, usersById, menuById) => ({
 
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { items, paymentMethod = 'Cash' } = req.body;
+    const { items, paymentMethod = 'Cash', cashReceived } = req.body;
     if (!Array.isArray(items) || items.length === 0 ||
         !paymentMethods.includes(paymentMethod) ||
         items.some(item => !item || typeof item.menuItemId !== 'string' ||
@@ -121,6 +123,15 @@ router.post('/', authMiddleware, async (req, res) => {
       .toFixed(2));
     const totalGST = Number(billItems.reduce((sum, item) => sum + item.gstAmount, 0).toFixed(2));
     const total = Number((subtotal + totalGST + totalParcelCharge).toFixed(2));
+    const cashReceivedAmount = paymentMethod === 'Cash' ? Number(cashReceived) : null;
+    if (paymentMethod === 'Cash' &&
+        (!Number.isFinite(cashReceivedAmount) ||
+          Math.round(cashReceivedAmount * 100) < Math.round(total * 100))) {
+      return res.status(400).json({ error: 'Cash received must be at least the bill total' });
+    }
+    const changeDue = paymentMethod === 'Cash'
+      ? Number(((Math.round(cashReceivedAmount * 100) - Math.round(total * 100)) / 100).toFixed(2))
+      : null;
     const billNumber = `MAN-${Date.now()}-${randomBytes(3).toString('hex').toUpperCase()}`;
 
     const { data, error } = await supabase
@@ -132,6 +143,8 @@ router.post('/', authMiddleware, async (req, res) => {
         subtotal,
         total_gst: totalGST,
         total,
+        cash_received: cashReceivedAmount,
+        change_due: changeDue,
         payment_method: paymentMethod,
         status: 'Completed'
       })

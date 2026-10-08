@@ -154,6 +154,7 @@ const Billing = () => {
   const [pendingItem, setPendingItem] = useState(null);
   const [selectedServiceType, setSelectedServiceType] = useState('dine-in');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [cashReceived, setCashReceived] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [activeSubcategory, setActiveSubcategory] = useState('All');
   const [search, setSearch] = useState('');
@@ -265,6 +266,13 @@ const Billing = () => {
     return Number((itemsTotal + calculateParcelCharge()).toFixed(2));
   };
 
+  const cashReceivedAmount = Number(cashReceived);
+  const cashIsSufficient = cashReceived !== '' && Number.isFinite(cashReceivedAmount) &&
+    Math.round(cashReceivedAmount * 100) >= Math.round(calculateTotal() * 100);
+  const changeDue = cashIsSufficient
+    ? (Math.round(cashReceivedAmount * 100) - Math.round(calculateTotal() * 100)) / 100
+    : 0;
+
   const calculateGST = () => {
     return selectedItems.reduce((sum, item) => {
       const inclusiveTotal = Number((item.menuItem.price * item.quantity).toFixed(2));
@@ -293,6 +301,7 @@ const Billing = () => {
   };
 
   const handleCreateBill = async () => {
+    if (paymentMethod === 'Cash' && !cashIsSufficient) return;
     try {
       const billData = {
         items: selectedItems.map((item) => ({
@@ -301,11 +310,13 @@ const Billing = () => {
           serviceType: item.serviceType,
         })),
         paymentMethod,
+        cashReceived: paymentMethod === 'Cash' ? cashReceivedAmount : null,
       };
 
       const response = await API.post('/billing', billData);
       setSelectedItems([]);
       setPaymentMethod('Cash');
+      setCashReceived('');
       setOpenDialog(false);
       setLastBill(response.data);
       fetchData();
@@ -729,6 +740,38 @@ const Billing = () => {
               </Select>
             </FormControl>
 
+            {paymentMethod === 'Cash' && (
+              <>
+                <TextField
+                  fullWidth
+                  required
+                  autoFocus
+                  type="number"
+                  label="Cash received"
+                  value={cashReceived}
+                  onChange={(event) => setCashReceived(event.target.value)}
+                  inputProps={{ min: calculateTotal(), step: '0.01', inputMode: 'decimal' }}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                  }}
+                />
+                {cashReceived !== '' && (
+                  <Typography
+                    role="status"
+                    sx={{
+                      mt: 1,
+                      fontWeight: 700,
+                      color: cashIsSufficient ? '#287a48' : '#b33b31',
+                    }}
+                  >
+                    {cashIsSufficient
+                      ? `Change to return: ₹${changeDue.toFixed(2)}`
+                      : `Amount due: ₹${(calculateTotal() - cashReceivedAmount).toFixed(2)}`}
+                  </Typography>
+                )}
+              </>
+            )}
+
             <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
               <Button
                 fullWidth
@@ -742,6 +785,7 @@ const Billing = () => {
                 variant="contained"
                 sx={{ bgcolor: '#6f4e37', borderRadius: '10px' }}
                 onClick={handleCreateBill}
+                disabled={paymentMethod === 'Cash' && !cashIsSufficient}
               >
                 Create Bill
               </Button>

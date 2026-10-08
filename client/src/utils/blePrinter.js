@@ -147,6 +147,10 @@ const buildFullReceiptBytes = (bill) => {
   out.push(...textBytes(`Token No: ${tokenNumber}\n`));
   out.push(...textBytes(`Date: ${dateStr}  Time: ${timeStr}\n`));
   out.push(...textBytes(`Payment: ${bill.paymentMethod || '-'}\n`));
+  if (bill.cashReceived != null) {
+    out.push(...textBytes(padRow('Cash received', `Rs.${money(bill.cashReceived)}`)));
+    out.push(...textBytes(padRow('Change', `Rs.${money(bill.changeDue)}`)));
+  }
   out.push(...textBytes(divider()));
 
   items.forEach((item) => {

@@ -145,6 +145,7 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
   <div class="meta">Token No: <strong>${escapeHtml(tokenNumber)}</strong></div>
   <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   <div class="meta">Payment mode: ${escapeHtml(bill.paymentMethod || '—')}</div>
+  ${bill.cashReceived != null ? `<div class="meta">Cash received: ${formatCurrency(bill.cashReceived)}</div><div class="meta">Change: ${formatCurrency(bill.changeDue || 0)}</div>` : ''}
   <hr />
   <table>
     <thead>
