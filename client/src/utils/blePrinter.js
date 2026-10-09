@@ -147,6 +147,7 @@ const buildFullReceiptBytes = (bill) => {
   out.push(...textBytes(`Token No: ${tokenNumber}\n`));
   out.push(...textBytes(`Date: ${dateStr}  Time: ${timeStr}\n`));
   out.push(...textBytes(`Payment: ${bill.paymentMethod || '-'}\n`));
+  if (bill.tableNumber) out.push(...textBytes(`Table: ${bill.tableNumber}\n`));
   if (bill.cashReceived != null) {
     out.push(...textBytes(padRow('Cash received', `Rs.${money(bill.cashReceived)}`)));
     out.push(...textBytes(padRow('Change', `Rs.${money(bill.changeDue)}`)));
@@ -192,6 +193,7 @@ const buildKitchenReceiptBytes = (bill) => {
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const tokenNumber = getBillTokenNumber(bill);
+  const kitchenHeader = bill.tableNumber ? `TABLE ${bill.tableNumber}` : `TOKEN ${tokenNumber}`;
 
   const out = startPrinterBuffer();
   out.push(...cmds.alignCenter);
@@ -201,7 +203,8 @@ const buildKitchenReceiptBytes = (bill) => {
   out.push(...textBytes(`${RESTAURANT_INFO.tagline}\n`));
   out.push(...textBytes(divider()));
   out.push(...cmds.boldOn);
-  out.push(...textBytes(`TOKEN ${tokenNumber}\n`));
+  out.push(...textBytes(`${kitchenHeader}\n`));
+  if (bill.tableNumber) out.push(...textBytes(`Order token: ${tokenNumber}\n`));
   out.push(...cmds.boldOff);
   out.push(...textBytes(`Date: ${dateStr} ${timeStr}\n`));
   out.push(...cmds.alignLeft);

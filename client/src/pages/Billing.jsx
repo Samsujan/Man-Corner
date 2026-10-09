@@ -33,9 +33,9 @@ import {
   Snackbar,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import RemoveIcon from '@mui/icons-material/Remove';
+import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -45,9 +45,13 @@ import {
   getCompactBillNumber,
   getBillTokenNumber,
   printBillReceipts,
+  printCustomerBillReceipt,
+  printKitchenTokenReceipt,
 } from '../utils/printReceipt';
 import {
   printBillToBluetoothPrinter,
+  printFullBillToBluetoothPrinter,
+  printKitchenTokenToBluetoothPrinter,
   isBluetoothPrintSupported,
 } from '../utils/blePrinter';
 
@@ -108,13 +112,13 @@ const MenuItemPhoto = ({ item }) => {
   return (
     <Box
       sx={{
-        width: 76,
-        height: 70,
+        width: 44,
+        height: 40,
         flexShrink: 0,
         display: 'grid',
         placeItems: 'center',
         overflow: 'hidden',
-        borderRadius: '15px',
+        borderRadius: '9px',
         color: '#806112',
         bgcolor: '#fcf3d4',
         border: '1px solid rgba(146,111,25,0.14)',
@@ -147,6 +151,10 @@ const Billing = () => {
   const { user } = useSelector((state) => state.auth);
   const [menuItems, setMenuItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [sentItems, setSentItems] = useState([]);
+  const [tableOrders, setTableOrders] = useState([]);
+  const [selectedTableNumber, setSelectedTableNumber] = useState(null);
+  const [activeTableOrder, setActiveTableOrder] = useState(null);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -158,14 +166,20 @@ const Billing = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [activeSubcategory, setActiveSubcategory] = useState('All');
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sendingToKitchen, setSendingToKitchen] = useState(false);
+  const [lastBillPrintMode, setLastBillPrintMode] = useState('both');
 
   const fetchData = useCallback(async () => {
     try {
-      const requests = [API.get('/menu')];
-      if (user?.role === 'owner') requests.push(API.get('/billing'));
-      const [menuRes, billsRes] = await Promise.all(requests);
+      const [menuRes, tablesRes, billsRes] = await Promise.all([
+        API.get('/menu'),
+        API.get('/billing/tables'),
+        user?.role === 'owner' ? API.get('/billing') : Promise.resolve({ data: [] }),
+      ]);
       setMenuItems(menuRes.data);
-      setBills(billsRes?.data || []);
+      setTableOrders(tablesRes.data);
+      setBills(billsRes.data || []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -206,9 +220,38 @@ const Billing = () => {
     });
   }, [menuItems, activeCategory, activeSubcategory, search, subcategories.length]);
 
-  const getQuantity = (itemId) => selectedItems
+  const orderItems = [...sentItems, ...selectedItems];
+
+  const getQuantity = (itemId) => orderItems
     .filter((selected) => selected.menuItem._id === itemId)
     .reduce((quantity, selected) => quantity + selected.quantity, 0);
+
+  const selectTable = (tableNumber) => {
+    if (selectedItems.length && !window.confirm('Discard the unsent items before switching tables?')) return;
+    const order = tableOrders.find((item) => Number(item.tableNumber) === tableNumber) || null;
+    const savedItems = (order?.items || []).filter((item) => !item.isParcelCharge).map((item) => ({
+      ...item,
+      menuItem: item.menuItem?._id ? item.menuItem : {
+        _id: item.menuItem || item.id,
+        name: item.name,
+        price: Number(item.price),
+        gstRate: Number(item.gstRate),
+      },
+      serviceType: item.serviceType || 'dine-in',
+    }));
+    setSelectedTableNumber(tableNumber);
+    setActiveTableOrder(order);
+    setSentItems(savedItems);
+    setSelectedItems([]);
+  };
+
+  const selectWalkIn = () => {
+    if (selectedItems.length && !window.confirm('Discard the unsent items and switch to walk-in billing?')) return;
+    setSelectedTableNumber(null);
+    setActiveTableOrder(null);
+    setSentItems([]);
+    setSelectedItems([]);
+  };
 
   const promptServiceType = (item) => {
     setPendingItem(item);
@@ -234,34 +277,20 @@ const Billing = () => {
     }
   };
 
-  const decrementItem = (itemId) => {
-    const existingItem = [...selectedItems].reverse().find((i) => i.menuItem._id === itemId);
-    if (!existingItem) return;
-    if (existingItem.quantity <= 1) {
-      setSelectedItems(selectedItems.filter((item) => item !== existingItem));
-    } else {
-      setSelectedItems(
-        selectedItems.map((i) =>
-          i === existingItem ? { ...i, quantity: i.quantity - 1 } : i
-        )
-      );
-    }
-  };
-
   const removeItemFromBill = (itemId, serviceType) => {
     setSelectedItems(selectedItems.filter((i) => (
       i.menuItem._id !== itemId || i.serviceType !== serviceType
     )));
   };
 
-  const getTakeawayQuantity = () => selectedItems
+  const getTakeawayQuantity = () => orderItems
     .filter((item) => item.serviceType === 'take-away')
     .reduce((quantity, item) => quantity + item.quantity, 0);
 
   const calculateParcelCharge = () => getTakeawayQuantity() * PARCEL_CHARGE;
 
   const calculateTotal = () => {
-    const itemsTotal = selectedItems
+    const itemsTotal = orderItems
       .reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0)
     return Number((itemsTotal + calculateParcelCharge()).toFixed(2));
   };
@@ -274,7 +303,7 @@ const Billing = () => {
     : 0;
 
   const calculateGST = () => {
-    return selectedItems.reduce((sum, item) => {
+    return orderItems.reduce((sum, item) => {
       const inclusiveTotal = Number((item.menuItem.price * item.quantity).toFixed(2));
       const gst = Number((inclusiveTotal * item.gstRate / (100 + item.gstRate)).toFixed(2));
       return sum + gst;
@@ -300,6 +329,56 @@ const Billing = () => {
     }
   };
 
+  const handlePrintCustomerBill = async (bill) => {
+    setPrintingBillId(bill._id);
+    try {
+      if (isBluetoothPrintSupported()) await printFullBillToBluetoothPrinter(bill);
+      else printCustomerBillReceipt(bill);
+    } catch (error) {
+      console.error('Customer receipt printing failed:', error);
+      alert(`Printing failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setPrintingBillId(null);
+    }
+  };
+
+  const handleSendToKitchen = async () => {
+    if (selectedTableNumber == null || selectedItems.length === 0) return;
+    setSendingToKitchen(true);
+    try {
+      const response = await API.post(`/billing/table-orders/${selectedTableNumber}/send`, {
+        items: selectedItems.map((item) => ({
+          menuItemId: item.menuItem._id,
+          quantity: item.quantity,
+          serviceType: item.serviceType,
+        })),
+      });
+      const { order, kitchenItems } = response.data;
+      setActiveTableOrder(order);
+      setSentItems((order.items || []).filter((item) => !item.isParcelCharge).map((item) => ({
+        ...item,
+        menuItem: item.menuItem?._id ? item.menuItem : {
+          _id: item.menuItem || item.id,
+          name: item.name,
+          price: Number(item.price),
+          gstRate: Number(item.gstRate),
+        },
+      })));
+      setSelectedItems([]);
+      setTableOrders((current) => [order, ...current.filter((item) => Number(item.tableNumber) !== selectedTableNumber)]);
+      const ticket = { ...order, tableNumber: selectedTableNumber, items: kitchenItems };
+      if (isBluetoothPrintSupported()) await printKitchenTokenToBluetoothPrinter(ticket);
+      else printKitchenTokenReceipt(ticket);
+      fetchData();
+    } catch (error) {
+      console.error('Could not send order to kitchen:', error);
+      alert(error.response?.data?.error || `Order saved, but kitchen printing failed: ${error.message || 'Unknown error'}`);
+      fetchData();
+    } finally {
+      setSendingToKitchen(false);
+    }
+  };
+
   const handleCreateBill = async () => {
     if (paymentMethod === 'Cash' && !cashIsSufficient) return;
     try {
@@ -313,8 +392,19 @@ const Billing = () => {
         cashReceived: paymentMethod === 'Cash' ? cashReceivedAmount : null,
       };
 
-      const response = await API.post('/billing', billData);
+      const response = selectedTableNumber != null && activeTableOrder
+        ? await API.put(`/billing/${activeTableOrder._id}/complete`, {
+          paymentMethod,
+          cashReceived: paymentMethod === 'Cash' ? cashReceivedAmount : null,
+        })
+        : await API.post('/billing', billData);
+      setLastBillPrintMode(selectedTableNumber != null && activeTableOrder ? 'customer' : 'both');
       setSelectedItems([]);
+      setSentItems([]);
+      setActiveTableOrder(null);
+      if (selectedTableNumber != null) {
+        setTableOrders((current) => current.filter((item) => item._id !== response.data._id));
+      }
       setPaymentMethod('Cash');
       setCashReceived('');
       setOpenDialog(false);
@@ -378,30 +468,80 @@ const Billing = () => {
         </Box>
       </Box>
 
+      <Box sx={{ mb: 2.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ color: '#503622', fontWeight: 700 }}>Select table</Typography>
+          <Button size="small" onClick={selectWalkIn} variant={selectedTableNumber == null ? 'contained' : 'text'}>
+            Walk-in
+          </Button>
+        </Box>
+        <ToggleButtonGroup
+          exclusive
+          value={selectedTableNumber}
+          onChange={(event, value) => { if (value != null) selectTable(value); }}
+          sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, '& .MuiToggleButtonGroup-grouped': { border: '1px solid #ddd !important', borderRadius: '8px !important', m: 0 } }}
+        >
+          {Array.from({ length: 10 }, (_, index) => index + 1).map((tableNumber) => {
+            const isOpen = tableOrders.some((order) => Number(order.tableNumber) === tableNumber);
+            return (
+              <ToggleButton
+                key={tableNumber}
+                value={tableNumber}
+                aria-label={`Table ${tableNumber}${isOpen ? ', open order' : ', available'}`}
+                sx={{ minWidth: 56, minHeight: 44, px: 1, fontWeight: 700, textTransform: 'none' }}
+              >
+                T{tableNumber}{isOpen ? ' •' : ''}
+              </ToggleButton>
+            );
+          })}
+        </ToggleButtonGroup>
+        {selectedTableNumber != null && (
+          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.75 }}>
+            {activeTableOrder
+              ? `Table ${selectedTableNumber} has an open order. New items print to the kitchen when sent.`
+              : `Table ${selectedTableNumber} is selected. Send items to the kitchen to open its order.`}
+          </Typography>
+        )}
+      </Box>
+
       <Grid container spacing={3}>
         {/* Menu Selection */}
         <Grid item xs={12} md={7}>
           <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Select Items
-              </Typography>
-
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Search dishes…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                sx={{ mb: 2 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" sx={{ color: '#a08670' }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Select Items</Typography>
+                <Tooltip title={searchOpen ? 'Close search' : 'Search dishes'}>
+                  <IconButton
+                    size="small"
+                    aria-label={searchOpen ? 'Close dish search' : 'Search dishes'}
+                    onClick={() => {
+                      setSearchOpen((open) => !open);
+                      setSearch('');
+                    }}
+                  >
+                    {searchOpen ? <CloseIcon fontSize="small" /> : <SearchIcon fontSize="small" />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              {searchOpen && (
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Search dishes…"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  autoComplete="off"
+                  sx={{ mb: 1.5 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" sx={{ color: '#a08670' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
 
               <Tabs
                 value={activeCategory}
@@ -466,107 +606,61 @@ const Billing = () => {
                 sx={{
                   display: 'grid',
                   gridTemplateColumns: {
-                    xs: 'repeat(2, minmax(0, 1fr))',
-                    sm: 'repeat(3, minmax(0, 1fr))',
-                    lg: 'repeat(4, minmax(0, 1fr))',
+                    xs: 'repeat(4, minmax(0, 1fr))',
+                    sm: 'repeat(5, minmax(0, 1fr))',
+                    lg: 'repeat(6, minmax(0, 1fr))',
+                    xl: 'repeat(7, minmax(0, 1fr))',
                   },
-                  gap: 1.5,
+                  gap: 0.75,
                 }}
               >
                 {visibleItems.map((item) => {
                   const quantity = getQuantity(item._id);
                   return (
-                    <Card
+                    <Button
                       key={item._id}
+                      fullWidth
                       variant="outlined"
+                      onClick={() => promptServiceType(item)}
+                      aria-label={`Add ${item.name}, ₹${Number(item.price).toFixed(2)}, choose dine in or take away`}
                       sx={{
-                        p: 1,
-                        borderRadius: '16px',
+                        position: 'relative',
+                        minWidth: 0,
+                        minHeight: 78,
+                        px: 0.5,
+                        py: 0.75,
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        gap: 0.4,
+                        textTransform: 'none',
                         borderColor: quantity > 0 ? '#c59a32' : 'rgba(146,111,25,0.16)',
                         bgcolor: quantity > 0 ? '#fff5d6' : '#fffdf4',
-                        transition: 'border-color 160ms ease, background-color 160ms ease, transform 160ms ease',
-                        '&:hover': {
-                          borderColor: '#c59a32',
-                          transform: 'translateY(-1px)',
-                        },
+                        '&:hover': { borderColor: '#c59a32', bgcolor: '#fff5d6' },
                       }}
                     >
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.9 }}>
-                        <Box sx={{ position: 'relative' }}>
-                          <MenuItemPhoto item={item} />
-                          {quantity > 0 && (
-                            <Chip
-                              size="small"
-                              label={quantity}
-                              sx={{
-                                position: 'absolute',
-                                top: -8,
-                                right: -8,
-                                minWidth: 22,
-                                height: 22,
-                                fontWeight: 700,
-                                bgcolor: '#68462f',
-                                color: '#fff',
-                                '& .MuiChip-label': { px: 0.9 },
-                              }}
-                            />
-                          )}
-                        </Box>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 700,
-                            color: '#3b3027',
-                            textAlign: 'center',
-                            lineHeight: 1.25,
-                            minHeight: 34,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {item.name}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#68462f', fontWeight: 700 }}>
-                          ₹{Number(item.price).toFixed(2)}
-                          <Typography component="span" variant="caption" sx={{ color: '#8b7d71', ml: 0.5, fontWeight: 500 }}>
-                            incl. GST
-                          </Typography>
-                        </Typography>
-                        {quantity === 0 ? (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            startIcon={<AddIcon fontSize="small" />}
-                            onClick={() => promptServiceType(item)}
-                            sx={{ bgcolor: '#68462f', borderRadius: '999px', px: 1.5, '&:hover': { bgcolor: '#503622' } }}
-                          >
-                            Add
-                          </Button>
-                        ) : (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                            <IconButton
-                              aria-label={`Remove one ${item.name}`}
-                              onClick={() => decrementItem(item._id)}
-                              sx={{ width: 32, height: 32, bgcolor: '#eee5da', '&:hover': { bgcolor: '#e5d8c8' } }}
-                            >
-                              <RemoveIcon fontSize="small" />
-                            </IconButton>
-                            <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, color: '#503622' }}>
-                              {quantity}
-                            </Typography>
-                            <IconButton
-                              aria-label={`Add one ${item.name}`}
-                              onClick={() => promptServiceType(item)}
-                              sx={{ width: 32, height: 32, bgcolor: '#68462f', color: '#fff', '&:hover': { bgcolor: '#503622' } }}
-                            >
-                              <AddIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
+                      <Box sx={{ position: 'relative' }}>
+                        <MenuItemPhoto item={item} />
+                        {quantity > 0 && (
+                          <Chip size="small" label={quantity} sx={{
+                            position: 'absolute', top: -6, right: -7, minWidth: 19, height: 19,
+                            bgcolor: '#68462f', color: '#fff', fontWeight: 700,
+                            '& .MuiChip-label': { px: 0.5 },
+                          }} />
                         )}
                       </Box>
-                    </Card>
+                      <Typography sx={{
+                        width: '100%', fontSize: '0.69rem', lineHeight: 1.15, minHeight: 25,
+                        color: '#3b3027', fontWeight: 700, textAlign: 'center',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>
+                        {item.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#68462f', fontSize: '0.68rem', fontWeight: 700 }}>
+                        ₹{Number(item.price).toFixed(0)}
+                      </Typography>
+                    </Button>
                   );
                 })}
                 {visibleItems.length === 0 && (
@@ -587,12 +681,14 @@ const Billing = () => {
           <Card sx={{ borderRadius: '16px', position: 'sticky', top: 100, boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Bill Summary
+                {selectedTableNumber != null ? `Table ${selectedTableNumber} Order` : 'Bill Summary'}
               </Typography>
 
-              {selectedItems.length === 0 ? (
+              {orderItems.length === 0 ? (
                 <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Tap any item icon to start a bill.</Typography>
+                  <Typography color="text.secondary">
+                    {selectedTableNumber != null ? 'Add items, then send them to the kitchen.' : 'Tap a dish to start a bill.'}
+                  </Typography>
                 </Box>
               ) : (
                 <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 'none', border: '1px solid #eee2d8' }}>
@@ -606,26 +702,31 @@ const Billing = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {selectedItems.map((item) => {
+                      {orderItems.map((item) => {
+                        const isDraft = selectedItems.includes(item);
                         const itemTotal = item.menuItem.price * item.quantity;
                         return (
-                          <TableRow key={`${item.menuItem._id}-${item.serviceType}`}>
+                          <TableRow key={`${item.menuItem._id}-${item.serviceType}-${isDraft ? 'draft' : 'sent'}`}>
                             <TableCell>
                               {item.menuItem.name}
                               <Typography variant="caption" display="block" color="text.secondary">
-                                {item.serviceType === 'take-away' ? 'Take away' : 'Dine in'}
+                                {item.serviceType === 'take-away' ? 'Take away · +₹10' : 'Dine in'}
+                                {selectedTableNumber != null && ` · ${isDraft ? 'Not sent' : 'Kitchen sent'}`}
                               </Typography>
                             </TableCell>
                             <TableCell align="right">{item.quantity}</TableCell>
                             <TableCell align="right">₹{itemTotal.toFixed(2)}</TableCell>
                             <TableCell align="center">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => removeItemFromBill(item.menuItem._id, item.serviceType)}
-                              >
-                                <DeleteOutlineIcon fontSize="small" />
-                              </IconButton>
+                              {isDraft && (
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  aria-label={`Remove ${item.menuItem.name}`}
+                                  onClick={() => removeItemFromBill(item.menuItem._id, item.serviceType)}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -640,7 +741,7 @@ const Billing = () => {
                   <Typography>Items (incl. GST):</Typography>
                   <Typography sx={{ fontWeight: 600 }}>
                     ₹
-                    {selectedItems
+                    {orderItems
                       .reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0)
                       .toFixed(2)}
                   </Typography>
@@ -669,10 +770,19 @@ const Billing = () => {
                 fullWidth
                 variant="contained"
                 sx={{ bgcolor: '#6f4e37', py: 1.5, borderRadius: '10px' }}
-                disabled={selectedItems.length === 0}
-                onClick={() => setOpenDialog(true)}
+                disabled={selectedTableNumber != null
+                  ? (selectedItems.length > 0 ? sendingToKitchen : !activeTableOrder)
+                  : selectedItems.length === 0}
+                onClick={() => {
+                  if (selectedTableNumber != null && selectedItems.length > 0) handleSendToKitchen();
+                  else setOpenDialog(true);
+                }}
               >
-                Complete Billing
+                {selectedTableNumber != null
+                  ? selectedItems.length > 0
+                    ? (sendingToKitchen ? 'Sending to kitchen…' : 'Send to kitchen')
+                    : 'Take payment'
+                  : 'Complete Billing'}
               </Button>
             </CardContent>
           </Card>
@@ -854,9 +964,9 @@ const Billing = () => {
                   <TableCell align="center">
                     <IconButton
                       size="small"
-                      onClick={() => handlePrintBoth(bill)}
+                      onClick={() => (bill.tableNumber ? handlePrintCustomerBill(bill) : handlePrintBoth(bill))}
                       disabled={printingBillId === bill._id}
-                      title="Print customer and kitchen receipts"
+                      title={bill.tableNumber ? 'Print customer receipt only' : 'Print customer and kitchen receipts'}
                     >
                       <ReceiptLongIcon fontSize="small" sx={{ color: '#6f4e37' }} />
                     </IconButton>
@@ -876,7 +986,9 @@ const Billing = () => {
         open={!!lastBill}
         autoHideDuration={8000}
         onClose={() => setLastBill(null)}
-        message={lastBill ? `Bill ${getCompactBillNumber(lastBill.billNumber)} / Token ${getBillTokenNumber(lastBill)} created` : ''}
+        message={lastBill
+          ? `${lastBill.tableNumber ? `Table ${lastBill.tableNumber} paid · ` : ''}Bill ${getCompactBillNumber(lastBill.billNumber)} / Token ${getBillTokenNumber(lastBill)} created`
+          : ''}
         action={
           lastBill ? (
             <Button
@@ -884,9 +996,11 @@ const Billing = () => {
               startIcon={<ReceiptLongIcon fontSize="small" />}
               sx={{ color: '#90caf9' }}
               disabled={printingBillId === lastBill._id}
-              onClick={() => handlePrintBoth(lastBill)}
+              onClick={() => (lastBillPrintMode === 'customer'
+                ? handlePrintCustomerBill(lastBill)
+                : handlePrintBoth(lastBill))}
             >
-              Print both receipts
+              {lastBillPrintMode === 'customer' ? 'Print customer bill' : 'Print both receipts'}
             </Button>
           ) : null
         }

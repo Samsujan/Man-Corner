@@ -12,6 +12,7 @@ const requireOwner = (req, res) => {
 
 const fetchRows = async (table, dateColumn, startDate, endDate, limit, minimumDate) => {
   let query = supabase.from(table).select('*');
+  if (table === 'mc_bills') query = query.eq('status', 'Completed');
   if (table === 'mc_expenses') query = query.eq('entry_type', 'expense');
   if (startDate || minimumDate) {
     const lowerBound = startDate && minimumDate

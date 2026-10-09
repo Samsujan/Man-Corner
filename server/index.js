@@ -38,6 +38,8 @@ app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/fixed-costs', require('./routes/fixedCosts'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/food-analysis', require('./routes/foodAnalysis'));
+app.use('/api/checklists', require('./routes/checklists'));
 app.use('/api/users', require('./routes/users'));
 
 // Health Check

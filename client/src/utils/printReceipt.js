@@ -145,6 +145,7 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
   <div class="meta">Token No: <strong>${escapeHtml(tokenNumber)}</strong></div>
   <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   <div class="meta">Payment mode: ${escapeHtml(bill.paymentMethod || '—')}</div>
+  ${bill.tableNumber ? `<div class="meta">Table: ${escapeHtml(bill.tableNumber)}</div>` : ''}
   ${bill.cashReceived != null ? `<div class="meta">Cash received: ${formatCurrency(bill.cashReceived)}</div><div class="meta">Change: ${formatCurrency(bill.changeDue || 0)}</div>` : ''}
   <hr />
   <table>
@@ -184,6 +185,7 @@ export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const tokenNumber = getBillTokenNumber(bill);
+  const kitchenHeader = bill.tableNumber ? `TABLE ${bill.tableNumber}` : `TOKEN ${tokenNumber}`;
 
   const rows = items.filter((item) => !item.isParcelCharge).map((item) => {
     const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
@@ -202,7 +204,7 @@ export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Kitchen Token ${escapeHtml(tokenNumber)}</title>
+<title>Kitchen ${escapeHtml(kitchenHeader)}</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -238,7 +240,8 @@ export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
   <div class="center">
     <div class="name">${escapeHtml(RESTAURANT_INFO.name)}</div>
     <div class="tagline">${escapeHtml(RESTAURANT_INFO.tagline)}</div>
-    <div class="token">TOKEN ${escapeHtml(tokenNumber)}</div>
+    <div class="token">${escapeHtml(kitchenHeader)}</div>
+    ${bill.tableNumber ? `<div class="meta">Order token: ${escapeHtml(tokenNumber)}</div>` : ''}
     <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   </div>
   <hr />
@@ -288,6 +291,8 @@ export const printBillReceipts = (bill) => {
 </html>`;
   printHtmlDocument(combinedHtml);
 };
+
+export const printCustomerBillReceipt = (bill) => printFullBillReceipt(bill, true);
 
 // Backward-compatible alias.
 export const printBillReceipt = printBillReceipts;

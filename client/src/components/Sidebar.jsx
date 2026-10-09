@@ -21,6 +21,7 @@ import PaidIcon from '@mui/icons-material/Paid';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import PeopleIcon from '@mui/icons-material/People';
 import ContactsIcon from '@mui/icons-material/Contacts';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 
 const Sidebar = ({ open, onClose }) => {
   const { user } = useSelector((state) => state.auth);
@@ -70,6 +71,18 @@ const Sidebar = ({ open, onClose }) => {
       path: '/analytics',
       roles: ['owner'],
       badge: '📊',
+    },
+    {
+      label: 'Food Analysis',
+      icon: <RestaurantMenuIcon />,
+      path: '/food-analysis',
+      roles: ['owner'],
+    },
+    {
+      label: 'Checklists',
+      icon: <FactCheckIcon />,
+      path: '/checklists',
+      roles: ['owner'],
     },
     {
       label: 'Profit Sharing',

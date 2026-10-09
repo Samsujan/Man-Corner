@@ -22,6 +22,62 @@ const applyDateFilter = (query, column, startDate, endDate) => {
   return query;
 };
 
+const orderItemIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const buildFoodItems = (items, menuById) => items.map(item => {
+  const menuItem = menuById[item.menuItemId];
+  const quantity = Number(item.quantity);
+  const serviceType = item.serviceType || 'dine-in';
+  const price = Number(menuItem.price);
+  const gstRate = Number(menuItem.gst_rate);
+  const totalAmount = Number((price * quantity).toFixed(2));
+  const gstAmount = Number((totalAmount * gstRate / (100 + gstRate)).toFixed(2));
+  return {
+    menuItem: menuItem.id,
+    name: menuItem.name,
+    quantity,
+    price,
+    gstRate,
+    gstAmount,
+    totalAmount,
+    serviceType,
+    gstIncluded: true
+  };
+});
+
+const calculateBillTotals = foodItems => {
+  const parcelQuantity = foodItems
+    .filter(item => item.serviceType === 'take-away')
+    .reduce((sum, item) => sum + Number(item.quantity), 0);
+  const parcelTotal = Number((parcelQuantity * parcelChargePerItem).toFixed(2));
+  const items = [...foodItems];
+  if (parcelQuantity > 0) {
+    items.push({
+      name: 'Parcel charge',
+      quantity: parcelQuantity,
+      price: parcelChargePerItem,
+      gstRate: 0,
+      gstAmount: 0,
+      totalAmount: parcelTotal,
+      gstIncluded: false,
+      isParcelCharge: true
+    });
+  }
+  const subtotal = Number(foodItems
+    .reduce((sum, item) => sum + Number(item.totalAmount) - Number(item.gstAmount), 0)
+    .toFixed(2));
+  const totalGST = Number(foodItems
+    .reduce((sum, item) => sum + Number(item.gstAmount), 0)
+    .toFixed(2));
+  return {
+    items,
+    subtotal,
+    totalGST,
+    parcelTotal,
+    total: Number((subtotal + totalGST + parcelTotal).toFixed(2))
+  };
+};
+
 const expandBill = (bill, usersById, menuById) => ({
   ...bill,
   _id: bill.id,
@@ -31,6 +87,7 @@ const expandBill = (bill, usersById, menuById) => ({
     : String(bill.token_number).padStart(2, '0'),
   tokenDate: bill.token_date,
   createdAt: bill.created_at,
+  tableNumber: bill.table_number ?? null,
   paymentMethod: bill.payment_method,
   cashReceived: bill.cash_received == null ? null : Number(bill.cash_received),
   changeDue: bill.change_due == null ? null : Number(bill.change_due),
@@ -55,6 +112,130 @@ const expandBill = (bill, usersById, menuById) => ({
       gstRate: Number(item.gstRate)
     } : null
   }))
+});
+
+router.get('/tables', authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('mc_bills')
+      .select('*')
+      .eq('status', 'Pending')
+      .not('table_number', 'is', null)
+      .order('table_number');
+    if (error) throw error;
+    res.json(data.map(bill => expandBill(bill, {}, {})));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/table-orders/:tableNumber/send', authMiddleware, async (req, res) => {
+  const tableNumber = Number(req.params.tableNumber);
+  const { items } = req.body;
+  if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 10 ||
+      !Array.isArray(items) || items.length === 0 ||
+      items.some(item => !item || typeof item.menuItemId !== 'string' ||
+        !orderItemIdPattern.test(item.menuItemId) ||
+        !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1 || Number(item.quantity) > 99 ||
+        !['dine-in', 'take-away'].includes(item.serviceType))) {
+    return res.status(400).json({ error: 'Select a table and provide valid dine-in/take-away items' });
+  }
+
+  try {
+    const ids = [...new Set(items.map(item => item.menuItemId))];
+    const [{ data: menuItems, error: menuError }, { data: pending, error: pendingError }] = await Promise.all([
+      supabase.from('mc_menu_items').select('id, name, price, gst_rate, active').in('id', ids),
+      supabase.from('mc_bills').select('*').eq('table_number', tableNumber).eq('status', 'Pending').maybeSingle()
+    ]);
+    if (menuError) throw menuError;
+    if (pendingError) throw pendingError;
+    const menuById = Object.fromEntries(menuItems.map(item => [item.id, item]));
+    if (menuItems.length !== ids.length || menuItems.some(item => !item.active)) {
+      return res.status(400).json({ error: 'One or more menu items are unavailable' });
+    }
+
+    const newFoodItems = buildFoodItems(items, menuById);
+    const existingFoodItems = (pending?.items || []).filter(item => !item.isParcelCharge);
+    const totals = calculateBillTotals([...existingFoodItems, ...newFoodItems]);
+    const billValues = {
+      table_number: tableNumber,
+      items: totals.items,
+      subtotal: totals.subtotal,
+      total_gst: totals.totalGST,
+      total: totals.total,
+      status: 'Pending',
+      payment_method: pending?.payment_method || 'Cash',
+      cash_received: null,
+      change_due: null
+    };
+
+    let bill;
+    if (pending) {
+      const { data, error } = await supabase.from('mc_bills')
+        .update(billValues).eq('id', pending.id).eq('status', 'Pending').select('*').maybeSingle();
+      if (error) throw error;
+      if (!data) return res.status(409).json({ error: 'This table was just paid. Refresh the table list.' });
+      bill = data;
+    } else {
+      const billNumber = `MAN-${Date.now()}-${randomBytes(3).toString('hex').toUpperCase()}`;
+      const { data, error } = await supabase.from('mc_bills').insert({
+        ...billValues,
+        bill_number: billNumber,
+        created_by: req.user.id
+      }).select('*').single();
+      if (error) {
+        if (error.code === '23505') {
+          return res.status(409).json({ error: 'This table already has an open order. Refresh the table list.' });
+        }
+        throw error;
+      }
+      bill = data;
+    }
+
+    res.status(pending ? 200 : 201).json({
+      order: expandBill(bill, {}, {}),
+      kitchenItems: newFoodItems,
+      tableNumber
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/:id/complete', authMiddleware, async (req, res) => {
+  try {
+    const { paymentMethod = 'Cash', cashReceived } = req.body;
+    if (!paymentMethods.includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Provide a supported payment method' });
+    }
+    const { data: pending, error: pendingError } = await supabase.from('mc_bills')
+      .select('*').eq('id', req.params.id).eq('status', 'Pending').not('table_number', 'is', null).maybeSingle();
+    if (pendingError) throw pendingError;
+    if (!pending) return res.status(409).json({ error: 'This table order is already paid or no longer open.' });
+
+    const total = Number(pending.total);
+    const cashReceivedAmount = paymentMethod === 'Cash' ? Number(cashReceived) : null;
+    if (paymentMethod === 'Cash' && (!Number.isFinite(cashReceivedAmount) ||
+        Math.round(cashReceivedAmount * 100) < Math.round(total * 100))) {
+      return res.status(400).json({ error: 'Cash received must be at least the bill total' });
+    }
+    const changeDue = paymentMethod === 'Cash'
+      ? Number(((Math.round(cashReceivedAmount * 100) - Math.round(total * 100)) / 100).toFixed(2))
+      : null;
+    const { data, error } = await supabase.from('mc_bills').update({
+      status: 'Completed',
+      payment_method: paymentMethod,
+      cash_received: cashReceivedAmount,
+      change_due: changeDue
+    }).eq('id', pending.id).eq('status', 'Pending').select('*').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(409).json({ error: 'Payment was already completed for this table.' });
+    res.json(expandBill(data, {
+      [req.user.id]: { id: req.user.id, _id: req.user.id, name: req.user.name }
+    }, {}));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 router.post('/', authMiddleware, async (req, res) => {
@@ -177,6 +358,7 @@ router.get('/', authMiddleware, async (req, res) => {
     }
     if (end && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) end.setUTCHours(23, 59, 59, 999);
     let query = supabase.from('mc_bills').select('*');
+    query = query.eq('status', 'Completed');
     query = applyDateFilter(
       query,
       'created_at',
