@@ -31,6 +31,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
+import PrintIcon from '@mui/icons-material/Print';
 
 const getLocalDate = (date) => {
   const year = date.getFullYear();
@@ -64,6 +65,7 @@ const CafeChecklists = () => {
   const [error, setError] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskCategory, setTaskCategory] = useState('Ingredients');
+  const [taskNotes, setTaskNotes] = useState('');
   const [adding, setAdding] = useState(false);
 
   const fetchTasks = useCallback(async () => {
@@ -108,8 +110,11 @@ const CafeChecklists = () => {
     setAdding(true);
     setError('');
     try {
-      await API.post('/checklists/tasks', { title: taskTitle.trim(), cadence, category: taskCategory });
+      await API.post('/checklists/tasks', {
+        title: taskTitle.trim(), cadence, category: taskCategory, notes: taskNotes.trim(),
+      });
       setTaskTitle('');
+      setTaskNotes('');
       await fetchTasks();
     } catch (requestError) {
       setError(requestError.response?.data?.error || 'Could not add checklist item.');
@@ -131,8 +136,8 @@ const CafeChecklists = () => {
 
   const downloadChecklist = () => {
     const rows = [
-      ['Cadence', 'Period starting', 'Category', 'Checklist item', 'Complete'],
-      ...tasks.map((task) => [cadence, checklistDate, task.category, task.title, task.completed ? 'Yes' : 'No']),
+      ['Cadence', 'Period starting', 'Category', 'Ingredient / item', 'Menu use / notes', 'Stock / quantity', 'Complete'],
+      ...tasks.map((task) => [cadence, checklistDate, task.category, task.title, task.notes || '', '', task.completed ? 'Yes' : 'No']),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -161,7 +166,21 @@ const CafeChecklists = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" className="cafe-checklist-print" sx={{ py: 4 }}>
+      <style>{`
+        @media print {
+          @page { margin: 12mm; }
+          body * { visibility: hidden !important; }
+          .cafe-checklist-print, .cafe-checklist-print * { visibility: visible !important; }
+          .cafe-checklist-print { position: absolute !important; inset: 0 !important; width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
+          .cafe-checklist-no-print { display: none !important; }
+          .cafe-checklist-print .MuiListItem-root { break-inside: avoid; border-bottom: 1px solid #aaa !important; }
+          .cafe-checklist-print .MuiListItemButton-root { padding: 3px 0 !important; min-height: 32px !important; }
+          .cafe-checklist-print .MuiListItemText-primary { font-size: 10pt !important; }
+          .cafe-checklist-print .MuiListItemText-secondary { font-size: 8pt !important; color: #444 !important; }
+          .cafe-checklist-print .MuiCheckbox-root { color: #222 !important; padding: 4px !important; }
+        }
+      `}</style>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 2, flexWrap: 'wrap', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <FactCheckIcon sx={{ color: '#247f78', fontSize: 34 }} />
@@ -175,12 +194,18 @@ const CafeChecklists = () => {
             </Typography>
           </Box>
         </Box>
-        <Button variant="outlined" startIcon={<DownloadIcon />} onClick={downloadChecklist} disabled={!tasks.length}>
-          Download CSV
-        </Button>
+        <Stack className="cafe-checklist-no-print" direction="row" spacing={1}>
+          <Button variant="outlined" startIcon={<PrintIcon />} onClick={() => window.print()} disabled={!tasks.length}>
+            Print
+          </Button>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={downloadChecklist} disabled={!tasks.length}>
+            Download CSV
+          </Button>
+        </Stack>
       </Box>
 
       <Tabs
+        className="cafe-checklist-no-print"
         value={cadence}
         onChange={(event, value) => setCadence(value)}
         sx={{ borderBottom: '1px solid #e8e0d8', mb: 2, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 } }}
@@ -189,7 +214,7 @@ const CafeChecklists = () => {
         <Tab value="weekly" label="Weekly" />
       </Tabs>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+      <Box className="cafe-checklist-no-print" sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <LinearProgress variant="determinate" value={progress} sx={{ flex: 1, height: 8, borderRadius: 4 }} />
         <Typography variant="body2" sx={{ minWidth: 94, textAlign: 'right', fontWeight: 700 }}>
           {completedCount} / {tasks.length} done
@@ -197,7 +222,7 @@ const CafeChecklists = () => {
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Box component="form" onSubmit={addTask} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+      <Box className="cafe-checklist-no-print" component="form" onSubmit={addTask} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
         <TextField
           size="small"
           label="Add checklist item"
@@ -208,10 +233,17 @@ const CafeChecklists = () => {
         <FormControl size="small" sx={{ minWidth: 170 }}>
           <InputLabel>Category</InputLabel>
           <Select value={taskCategory} label="Category" onChange={(event) => setTaskCategory(event.target.value)}>
-            {['Ingredients', 'Preparation', 'Food safety', 'Cleaning', 'Packaging', 'Safety', 'Equipment', 'Purchasing', 'Cash and admin', 'Miscellaneous']
+            {['Ingredients', 'Inventory · Protein', 'Inventory · Dairy', 'Inventory · Dairy and protein', 'Inventory · Dairy and condiments', 'Inventory · Bakery', 'Inventory · Produce', 'Inventory · Staples', 'Inventory · Cooking essentials', 'Inventory · Seasoning', 'Inventory · Beverages', 'Inventory · Frozen', 'Inventory · Packaging', 'Inventory · Weekly count', 'Preparation', 'Food safety', 'Cleaning', 'Packaging', 'Safety', 'Equipment', 'Purchasing', 'Cash and admin', 'Miscellaneous']
               .map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
           </Select>
         </FormControl>
+        <TextField
+          size="small"
+          label="Menu use / notes"
+          value={taskNotes}
+          onChange={(event) => setTaskNotes(event.target.value)}
+          sx={{ flex: '1 1 220px' }}
+        />
         <Button type="submit" variant="contained" startIcon={<AddIcon />} disabled={adding || !taskTitle.trim()} sx={{ bgcolor: '#68462f' }}>
           Add item
         </Button>
@@ -247,6 +279,7 @@ const CafeChecklists = () => {
                       </ListItemIcon>
                       <ListItemText
                         primary={task.title}
+                        secondary={task.notes || undefined}
                         primaryTypographyProps={{ sx: { textDecoration: task.completed ? 'line-through' : 'none', color: task.completed ? 'text.secondary' : 'text.primary' } }}
                       />
                     </ListItemButton>

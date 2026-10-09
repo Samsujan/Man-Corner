@@ -22,7 +22,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
   try {
     const [{ data: tasks, error: taskError }, { data: checks, error: checkError }] = await Promise.all([
-      supabase.from('mc_checklist_tasks').select('id, title, category, cadence, sort_order')
+      supabase.from('mc_checklist_tasks').select('id, title, category, cadence, sort_order, notes')
         .eq('cadence', cadence).eq('active', true).order('sort_order').order('title'),
       supabase.from('mc_checklist_checks').select('task_id, completed, completed_at')
         .eq('checklist_date', date)
@@ -68,10 +68,10 @@ router.post('/', authMiddleware, async (req, res) => {
 
 router.post('/tasks', authMiddleware, async (req, res) => {
   if (!requireOwner(req, res)) return;
-  const { title, cadence, category = 'Miscellaneous' } = req.body;
+  const { title, cadence, category = 'Miscellaneous', notes = '' } = req.body;
   if (typeof title !== 'string' || !title.trim() || !cadences.has(cadence) ||
-      typeof category !== 'string' || !category.trim()) {
-    return res.status(400).json({ error: 'A title, cadence, and category are required' });
+      typeof category !== 'string' || !category.trim() || typeof notes !== 'string') {
+    return res.status(400).json({ error: 'A title, cadence, category, and valid notes are required' });
   }
 
   try {
@@ -82,9 +82,10 @@ router.post('/tasks', authMiddleware, async (req, res) => {
       title: title.trim(),
       cadence,
       category: category.trim(),
+      notes: notes.trim() || null,
       sort_order: (count || 0) + 1,
       created_by: req.user.id
-    }).select('id, title, category, cadence, sort_order').single();
+    }).select('id, title, category, cadence, sort_order, notes').single();
     if (error) throw error;
     res.status(201).json({ ...data, completed: false, completedAt: null });
   } catch (error) {
