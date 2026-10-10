@@ -146,6 +146,8 @@ export const printFullBillReceipt = (bill, shouldPrint = true) => {
   <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   <div class="meta">Payment mode: ${escapeHtml(bill.paymentMethod || '—')}</div>
   ${bill.tableNumber ? `<div class="meta">Table: ${escapeHtml(bill.tableNumber)}</div>` : ''}
+  ${bill.orderType === 'parcel' && bill.customerName ? `<div class="meta">Customer: ${escapeHtml(bill.customerName)}</div>` : ''}
+  ${bill.orderType === 'parcel' && bill.customerName ? `<div class="meta">Parcel customer: ${escapeHtml(bill.customerName)}</div>` : ''}
   ${bill.cashReceived != null ? `<div class="meta">Cash received: ${formatCurrency(bill.cashReceived)}</div><div class="meta">Change: ${formatCurrency(bill.changeDue || 0)}</div>` : ''}
   <hr />
   <table>
@@ -185,7 +187,9 @@ export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
   const dateStr = createdAt.toLocaleDateString('en-IN');
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const tokenNumber = getBillTokenNumber(bill);
-  const kitchenHeader = bill.tableNumber ? `TABLE ${bill.tableNumber}` : `TOKEN ${tokenNumber}`;
+  const kitchenHeader = bill.tableNumber
+    ? `TABLE ${bill.tableNumber}`
+    : bill.orderType === 'parcel' ? 'PARCEL ORDER' : `TOKEN ${tokenNumber}`;
 
   const rows = items.filter((item) => !item.isParcelCharge).map((item) => {
     const name = escapeHtml(item.menuItem?.name || item.name || 'Item');
@@ -242,6 +246,7 @@ export const printKitchenTokenReceipt = (bill, shouldPrint = true) => {
     <div class="tagline">${escapeHtml(RESTAURANT_INFO.tagline)}</div>
     <div class="token">${escapeHtml(kitchenHeader)}</div>
     ${bill.tableNumber ? `<div class="meta">Order token: ${escapeHtml(tokenNumber)}</div>` : ''}
+    ${bill.orderType === 'parcel' && bill.customerName ? `<div class="meta">Customer: ${escapeHtml(bill.customerName)}</div>` : ''}
     <div class="meta">Date: ${dateStr} &nbsp; Time: ${timeStr}</div>
   </div>
   <hr />

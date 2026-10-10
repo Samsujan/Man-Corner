@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 const paymentMethods = ['Cash', 'Card', 'UPI', 'Online'];
-const parcelChargePerItem = 10;
+const parcelChargeForCount = count => count <= 0 ? 0 : count === 1 ? 10 : count === 2 ? 15 : 30;
 
 const getLegacyTokenNumber = (billNumber = '') => {
   const digits = String(billNumber).replace(/\D/g, '');
@@ -49,13 +49,13 @@ const calculateBillTotals = foodItems => {
   const parcelQuantity = foodItems
     .filter(item => item.serviceType === 'take-away')
     .reduce((sum, item) => sum + Number(item.quantity), 0);
-  const parcelTotal = Number((parcelQuantity * parcelChargePerItem).toFixed(2));
+  const parcelTotal = parcelChargeForCount(parcelQuantity);
   const items = [...foodItems];
   if (parcelQuantity > 0) {
     items.push({
-      name: 'Parcel charge',
-      quantity: parcelQuantity,
-      price: parcelChargePerItem,
+      name: `Parcel charge (${parcelQuantity} ${parcelQuantity === 1 ? 'parcel' : 'parcels'})`,
+      quantity: 1,
+      price: parcelTotal,
       gstRate: 0,
       gstAmount: 0,
       totalAmount: parcelTotal,
@@ -88,6 +88,8 @@ const expandBill = (bill, usersById, menuById) => ({
   tokenDate: bill.token_date,
   createdAt: bill.created_at,
   tableNumber: bill.table_number ?? null,
+  orderType: bill.order_type || (bill.table_number ? 'table' : 'walk-in'),
+  customerName: bill.customer_name || null,
   paymentMethod: bill.payment_method,
   cashReceived: bill.cash_received == null ? null : Number(bill.cash_received),
   changeDue: bill.change_due == null ? null : Number(bill.change_due),
@@ -120,8 +122,8 @@ router.get('/tables', authMiddleware, async (req, res) => {
       .from('mc_bills')
       .select('*')
       .eq('status', 'Pending')
-      .not('table_number', 'is', null)
-      .order('table_number');
+      .in('order_type', ['table', 'parcel'])
+      .order('created_at');
     if (error) throw error;
     res.json(data.map(bill => expandBill(bill, {}, {})));
   } catch (error) {
@@ -129,42 +131,59 @@ router.get('/tables', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/table-orders/:tableNumber/send', authMiddleware, async (req, res) => {
-  const tableNumber = Number(req.params.tableNumber);
-  const { items } = req.body;
-  if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 10 ||
+router.post('/open-orders/send', authMiddleware, async (req, res) => {
+  const { orderType, tableNumber: requestedTableNumber, customerName, pendingOrderId, items } = req.body;
+  const tableNumber = requestedTableNumber == null ? null : Number(requestedTableNumber);
+  const normalizedCustomerName = typeof customerName === 'string' ? customerName.trim() : '';
+  if (!['table', 'parcel'].includes(orderType) ||
+      (orderType === 'table' && (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 10)) ||
+      (orderType === 'parcel' && (!normalizedCustomerName || normalizedCustomerName.length > 120)) ||
       !Array.isArray(items) || items.length === 0 ||
       items.some(item => !item || typeof item.menuItemId !== 'string' ||
         !orderItemIdPattern.test(item.menuItemId) ||
         !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1 || Number(item.quantity) > 99 ||
         !['dine-in', 'take-away'].includes(item.serviceType))) {
-    return res.status(400).json({ error: 'Select a table and provide valid dine-in/take-away items' });
+    return res.status(400).json({ error: 'Select a table or enter a parcel customer name and provide valid items' });
   }
 
   try {
     const ids = [...new Set(items.map(item => item.menuItemId))];
-    const [{ data: menuItems, error: menuError }, { data: pending, error: pendingError }] = await Promise.all([
+    const [menuResult, pendingResult] = await Promise.all([
       supabase.from('mc_menu_items').select('id, name, price, gst_rate, active').in('id', ids),
-      supabase.from('mc_bills').select('*').eq('table_number', tableNumber).eq('status', 'Pending').maybeSingle()
+      pendingOrderId
+        ? supabase.from('mc_bills').select('*').eq('id', pendingOrderId).eq('status', 'Pending').eq('order_type', orderType).maybeSingle()
+        : orderType === 'table'
+          ? supabase.from('mc_bills').select('*').eq('table_number', tableNumber).eq('status', 'Pending').eq('order_type', 'table').maybeSingle()
+          : Promise.resolve({ data: null, error: null })
     ]);
+    const { data: menuItems, error: menuError } = menuResult;
+    const { data: pending, error: pendingError } = pendingResult;
     if (menuError) throw menuError;
     if (pendingError) throw pendingError;
+    if (pendingOrderId && !pending) {
+      return res.status(409).json({ error: 'This parcel order is no longer open. Refresh the order list.' });
+    }
     const menuById = Object.fromEntries(menuItems.map(item => [item.id, item]));
     if (menuItems.length !== ids.length || menuItems.some(item => !item.active)) {
       return res.status(400).json({ error: 'One or more menu items are unavailable' });
     }
 
     const newFoodItems = buildFoodItems(items, menuById);
+    if (orderType === 'parcel' && newFoodItems.some(item => item.serviceType !== 'take-away')) {
+      return res.status(400).json({ error: 'Parcel orders must be marked as take away' });
+    }
     const existingFoodItems = (pending?.items || []).filter(item => !item.isParcelCharge);
     const totals = calculateBillTotals([...existingFoodItems, ...newFoodItems]);
     const billValues = {
-      table_number: tableNumber,
+      table_number: orderType === 'table' ? tableNumber : null,
+      order_type: orderType,
+      customer_name: orderType === 'parcel' ? (pending?.customer_name || normalizedCustomerName) : null,
       items: totals.items,
       subtotal: totals.subtotal,
       total_gst: totals.totalGST,
       total: totals.total,
       status: 'Pending',
-      payment_method: pending?.payment_method || 'Cash',
+      payment_method: 'Cash',
       cash_received: null,
       change_due: null
     };
@@ -174,7 +193,7 @@ router.post('/table-orders/:tableNumber/send', authMiddleware, async (req, res) 
       const { data, error } = await supabase.from('mc_bills')
         .update(billValues).eq('id', pending.id).eq('status', 'Pending').select('*').maybeSingle();
       if (error) throw error;
-      if (!data) return res.status(409).json({ error: 'This table was just paid. Refresh the table list.' });
+      if (!data) return res.status(409).json({ error: 'This order was just paid. Refresh the open orders.' });
       bill = data;
     } else {
       const billNumber = `MAN-${Date.now()}-${randomBytes(3).toString('hex').toUpperCase()}`;
@@ -184,7 +203,7 @@ router.post('/table-orders/:tableNumber/send', authMiddleware, async (req, res) 
         created_by: req.user.id
       }).select('*').single();
       if (error) {
-        if (error.code === '23505') {
+        if (error.code === '23505' && orderType === 'table') {
           return res.status(409).json({ error: 'This table already has an open order. Refresh the table list.' });
         }
         throw error;
@@ -195,7 +214,8 @@ router.post('/table-orders/:tableNumber/send', authMiddleware, async (req, res) 
     res.status(pending ? 200 : 201).json({
       order: expandBill(bill, {}, {}),
       kitchenItems: newFoodItems,
-      tableNumber
+      tableNumber,
+      customerName: bill.customer_name || null
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -209,11 +229,13 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Provide a supported payment method' });
     }
     const { data: pending, error: pendingError } = await supabase.from('mc_bills')
-      .select('*').eq('id', req.params.id).eq('status', 'Pending').not('table_number', 'is', null).maybeSingle();
+      .select('*').eq('id', req.params.id).eq('status', 'Pending').in('order_type', ['table', 'parcel']).maybeSingle();
     if (pendingError) throw pendingError;
-    if (!pending) return res.status(409).json({ error: 'This table order is already paid or no longer open.' });
+    if (!pending) return res.status(409).json({ error: 'This order is already paid or no longer open.' });
 
-    const total = Number(pending.total);
+    const pendingFoodItems = (pending.items || []).filter(item => !item.isParcelCharge);
+    const settledTotals = calculateBillTotals(pendingFoodItems);
+    const total = settledTotals.total;
     const cashReceivedAmount = paymentMethod === 'Cash' ? Number(cashReceived) : null;
     if (paymentMethod === 'Cash' && (!Number.isFinite(cashReceivedAmount) ||
         Math.round(cashReceivedAmount * 100) < Math.round(total * 100))) {
@@ -223,13 +245,17 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
       ? Number(((Math.round(cashReceivedAmount * 100) - Math.round(total * 100)) / 100).toFixed(2))
       : null;
     const { data, error } = await supabase.from('mc_bills').update({
+      items: settledTotals.items,
+      subtotal: settledTotals.subtotal,
+      total_gst: settledTotals.totalGST,
+      total: settledTotals.total,
       status: 'Completed',
       payment_method: paymentMethod,
       cash_received: cashReceivedAmount,
       change_due: changeDue
     }).eq('id', pending.id).eq('status', 'Pending').select('*').maybeSingle();
     if (error) throw error;
-    if (!data) return res.status(409).json({ error: 'Payment was already completed for this table.' });
+    if (!data) return res.status(409).json({ error: 'Payment was already completed for this order.' });
     res.json(expandBill(data, {
       [req.user.id]: { id: req.user.id, _id: req.user.id, name: req.user.name }
     }, {}));
@@ -285,12 +311,12 @@ router.post('/', authMiddleware, async (req, res) => {
     const parcelQuantity = billItems
       .filter(item => item.serviceType === 'take-away')
       .reduce((sum, item) => sum + item.quantity, 0);
-    const totalParcelCharge = Number((parcelQuantity * parcelChargePerItem).toFixed(2));
+    const totalParcelCharge = parcelChargeForCount(parcelQuantity);
     if (parcelQuantity > 0) {
       billItems.push({
-        name: 'Parcel charge',
-        quantity: parcelQuantity,
-        price: parcelChargePerItem,
+        name: `Parcel charge (${parcelQuantity} ${parcelQuantity === 1 ? 'parcel' : 'parcels'})`,
+        quantity: 1,
+        price: totalParcelCharge,
         gstRate: 0,
         gstAmount: 0,
         totalAmount: totalParcelCharge,
@@ -327,6 +353,7 @@ router.post('/', authMiddleware, async (req, res) => {
         cash_received: cashReceivedAmount,
         change_due: changeDue,
         payment_method: paymentMethod,
+        order_type: 'walk-in',
         status: 'Completed'
       })
       .select('*')

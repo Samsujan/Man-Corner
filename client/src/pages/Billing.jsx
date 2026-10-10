@@ -35,6 +35,7 @@ import {
   ToggleButtonGroup,
   Tooltip,
 } from '@mui/material';
+import Stack from '@mui/material/Stack';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
@@ -104,7 +105,6 @@ const getItemSubcategory = (category, itemName) => {
 };
 
 const getCategoryLabel = (category) => category === 'Afternoon' ? 'Lunch' : category;
-const PARCEL_CHARGE = 10;
 
 const MenuItemPhoto = ({ item }) => {
   const [imageFailed, setImageFailed] = useState(false);
@@ -155,6 +155,10 @@ const Billing = () => {
   const [tableOrders, setTableOrders] = useState([]);
   const [selectedTableNumber, setSelectedTableNumber] = useState(null);
   const [activeTableOrder, setActiveTableOrder] = useState(null);
+  const [selectedParcelOrderId, setSelectedParcelOrderId] = useState('');
+  const [activeParcelOrder, setActiveParcelOrder] = useState(null);
+  const [parcelCustomerName, setParcelCustomerName] = useState('');
+  const [parcelNameDialogOpen, setParcelNameDialogOpen] = useState(false);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -221,6 +225,7 @@ const Billing = () => {
   }, [menuItems, activeCategory, activeSubcategory, search, subcategories.length]);
 
   const orderItems = [...sentItems, ...selectedItems];
+  const activeOrder = activeTableOrder || activeParcelOrder;
 
   const getQuantity = (itemId) => orderItems
     .filter((selected) => selected.menuItem._id === itemId)
@@ -240,6 +245,9 @@ const Billing = () => {
       serviceType: item.serviceType || 'dine-in',
     }));
     setSelectedTableNumber(tableNumber);
+    setActiveParcelOrder(null);
+    setSelectedParcelOrderId('');
+    setParcelCustomerName('');
     setActiveTableOrder(order);
     setSentItems(savedItems);
     setSelectedItems([]);
@@ -249,19 +257,74 @@ const Billing = () => {
     if (selectedItems.length && !window.confirm('Discard the unsent items and switch to walk-in billing?')) return;
     setSelectedTableNumber(null);
     setActiveTableOrder(null);
+    setActiveParcelOrder(null);
+    setSelectedParcelOrderId('');
+    setParcelCustomerName('');
     setSentItems([]);
+    setSelectedItems([]);
+  };
+
+  const openParcelOrder = () => {
+    if (selectedItems.length && !window.confirm('Discard the unsent items before starting a parcel order?')) return;
+    setSelectedTableNumber(null);
+    setActiveTableOrder(null);
+    setActiveParcelOrder(null);
+    setSelectedParcelOrderId('');
+    setSentItems([]);
+    setSelectedItems([]);
+    setParcelCustomerName('');
+    setParcelNameDialogOpen(true);
+  };
+
+  const startParcelOrder = () => {
+    const name = parcelCustomerName.trim();
+    if (!name) return;
+    setActiveParcelOrder(null);
+    setSelectedParcelOrderId('');
+    setParcelCustomerName(name);
+    setSelectedServiceType('take-away');
+    setParcelNameDialogOpen(false);
+  };
+
+  const selectParcelOrder = (orderId) => {
+    if (selectedItems.length && !window.confirm('Discard unsent items before switching parcel orders?')) return;
+    const order = tableOrders.find((item) => item._id === orderId && item.orderType === 'parcel');
+    if (!order) {
+      setSelectedParcelOrderId('');
+      setActiveParcelOrder(null);
+      setParcelCustomerName('');
+      setSentItems([]);
+      setSelectedItems([]);
+      return;
+    }
+    setSelectedTableNumber(null);
+    setActiveTableOrder(null);
+    setSelectedParcelOrderId(order._id);
+    setActiveParcelOrder(order);
+    setParcelCustomerName(order.customerName || '');
+    setSentItems((order.items || []).filter((item) => !item.isParcelCharge).map((item) => ({
+      ...item,
+      menuItem: item.menuItem?._id ? item.menuItem : {
+        _id: item.menuItem || item.id,
+        name: item.name,
+        price: Number(item.price),
+        gstRate: Number(item.gstRate),
+      },
+      serviceType: 'take-away',
+    })));
     setSelectedItems([]);
   };
 
   const promptServiceType = (item) => {
     setPendingItem(item);
-    setSelectedServiceType('dine-in');
+    setSelectedServiceType(activeParcelOrder || parcelCustomerName ? 'take-away' : 'dine-in');
     setServiceTypeDialogOpen(true);
   };
 
   const addItemToBill = (item, serviceType) => {
+    const selectedType = activeParcelOrder || parcelCustomerName ? 'take-away' : serviceType;
     const existingItem = selectedItems.find((selected) => (
-      selected.menuItem._id === item._id && selected.serviceType === serviceType
+      selected.menuItem._id === item._id && selected.serviceType === selectedType
     ));
     if (existingItem) {
       setSelectedItems(
@@ -272,7 +335,7 @@ const Billing = () => {
     } else {
       setSelectedItems([
         ...selectedItems,
-        { menuItem: item, quantity: 1, gstRate: item.gstRate, serviceType },
+        { menuItem: item, quantity: 1, gstRate: item.gstRate, serviceType: selectedType },
       ]);
     }
   };
@@ -287,7 +350,17 @@ const Billing = () => {
     .filter((item) => item.serviceType === 'take-away')
     .reduce((quantity, item) => quantity + item.quantity, 0);
 
-  const calculateParcelCharge = () => getTakeawayQuantity() * PARCEL_CHARGE;
+  const calculateParcelCharge = () => {
+    const quantity = getTakeawayQuantity();
+    return quantity === 1 ? 10 : quantity === 2 ? 15 : quantity >= 3 ? 30 : 0;
+  };
+
+  const getParcelFeeLabel = (quantity) => (
+    quantity <= 0 ? 'No parcel fee'
+      : quantity === 1 ? '1 parcel · ₹10'
+        : quantity === 2 ? '2 parcels · ₹15'
+          : `${quantity} parcels · ₹30`
+  );
 
   const calculateTotal = () => {
     const itemsTotal = orderItems
@@ -343,18 +416,27 @@ const Billing = () => {
   };
 
   const handleSendToKitchen = async () => {
-    if (selectedTableNumber == null || selectedItems.length === 0) return;
+    const orderType = selectedTableNumber != null ? 'table' : activeParcelOrder || parcelCustomerName ? 'parcel' : null;
+    if (!orderType || selectedItems.length === 0 || (orderType === 'parcel' && !parcelCustomerName.trim())) return;
     setSendingToKitchen(true);
     try {
-      const response = await API.post(`/billing/table-orders/${selectedTableNumber}/send`, {
+      const response = await API.post('/billing/open-orders/send', {
+        orderType,
+        tableNumber: orderType === 'table' ? selectedTableNumber : null,
+        customerName: orderType === 'parcel' ? parcelCustomerName.trim() : null,
+        pendingOrderId: orderType === 'parcel' ? selectedParcelOrderId || null : null,
         items: selectedItems.map((item) => ({
           menuItemId: item.menuItem._id,
           quantity: item.quantity,
-          serviceType: item.serviceType,
+          serviceType: orderType === 'parcel' ? 'take-away' : item.serviceType,
         })),
       });
       const { order, kitchenItems } = response.data;
-      setActiveTableOrder(order);
+      if (orderType === 'table') setActiveTableOrder(order);
+      else {
+        setActiveParcelOrder(order);
+        setSelectedParcelOrderId(order._id);
+      }
       setSentItems((order.items || []).filter((item) => !item.isParcelCharge).map((item) => ({
         ...item,
         menuItem: item.menuItem?._id ? item.menuItem : {
@@ -365,8 +447,17 @@ const Billing = () => {
         },
       })));
       setSelectedItems([]);
-      setTableOrders((current) => [order, ...current.filter((item) => Number(item.tableNumber) !== selectedTableNumber)]);
-      const ticket = { ...order, tableNumber: selectedTableNumber, items: kitchenItems };
+      setTableOrders((current) => [order, ...current.filter((item) => (
+        orderType === 'table'
+          ? item.orderType !== 'table' || Number(item.tableNumber) !== selectedTableNumber
+          : item._id !== order._id
+      ))]);
+      const ticket = {
+        ...order,
+        tableNumber: orderType === 'table' ? selectedTableNumber : null,
+        customerName: orderType === 'parcel' ? parcelCustomerName.trim() : null,
+        items: kitchenItems,
+      };
       if (isBluetoothPrintSupported()) await printKitchenTokenToBluetoothPrinter(ticket);
       else printKitchenTokenReceipt(ticket);
       fetchData();
@@ -392,17 +483,21 @@ const Billing = () => {
         cashReceived: paymentMethod === 'Cash' ? cashReceivedAmount : null,
       };
 
-      const response = selectedTableNumber != null && activeTableOrder
-        ? await API.put(`/billing/${activeTableOrder._id}/complete`, {
+      const response = activeOrder
+        ? await API.put(`/billing/${activeOrder._id}/complete`, {
           paymentMethod,
           cashReceived: paymentMethod === 'Cash' ? cashReceivedAmount : null,
         })
         : await API.post('/billing', billData);
-      setLastBillPrintMode(selectedTableNumber != null && activeTableOrder ? 'customer' : 'both');
+      setLastBillPrintMode(activeOrder ? 'customer' : 'both');
       setSelectedItems([]);
       setSentItems([]);
+      setSelectedTableNumber(null);
       setActiveTableOrder(null);
-      if (selectedTableNumber != null) {
+      setActiveParcelOrder(null);
+      setSelectedParcelOrderId('');
+      setParcelCustomerName('');
+      if (activeOrder) {
         setTableOrders((current) => current.filter((item) => item._id !== response.data._id));
       }
       setPaymentMethod('Cash');
@@ -471,9 +566,18 @@ const Billing = () => {
       <Box sx={{ mb: 2.5 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
           <Typography variant="subtitle2" sx={{ color: '#503622', fontWeight: 700 }}>Select table</Typography>
-          <Button size="small" onClick={selectWalkIn} variant={selectedTableNumber == null ? 'contained' : 'text'}>
-            Walk-in
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" onClick={selectWalkIn} variant={selectedTableNumber == null && !activeParcelOrder && !parcelCustomerName ? 'contained' : 'text'}>
+              Walk-in
+            </Button>
+            <Button
+              size="small"
+              onClick={openParcelOrder}
+              variant={activeParcelOrder || parcelCustomerName ? 'contained' : 'outlined'}
+            >
+              Parcel order
+            </Button>
+          </Stack>
         </Box>
         <ToggleButtonGroup
           exclusive
@@ -495,6 +599,28 @@ const Billing = () => {
             );
           })}
         </ToggleButtonGroup>
+        {tableOrders.some((order) => order.orderType === 'parcel') && (
+          <FormControl size="small" sx={{ minWidth: 260, mt: 1 }}>
+            <InputLabel>Open parcel orders</InputLabel>
+            <Select
+              value={selectedParcelOrderId}
+              label="Open parcel orders"
+              onChange={(event) => selectParcelOrder(event.target.value)}
+            >
+              <MenuItem value=""><em>Select customer parcel order</em></MenuItem>
+              {tableOrders.filter((order) => order.orderType === 'parcel').map((order) => (
+                <MenuItem key={order._id} value={order._id}>
+                  {order.customerName} · {getBillTokenNumber(order)} · ₹{Number(order.total).toFixed(2)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+        {parcelCustomerName && !activeParcelOrder && selectedTableNumber == null && (
+          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.75 }}>
+            New parcel order for {parcelCustomerName}
+          </Typography>
+        )}
         {selectedTableNumber != null && (
           <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.75 }}>
             {activeTableOrder
@@ -681,7 +807,11 @@ const Billing = () => {
           <Card sx={{ borderRadius: '16px', position: 'sticky', top: 100, boxShadow: '0 4px 20px rgba(111, 78, 55, 0.08)' }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                {selectedTableNumber != null ? `Table ${selectedTableNumber} Order` : 'Bill Summary'}
+                {selectedTableNumber != null
+                  ? `Table ${selectedTableNumber} Order`
+                  : activeParcelOrder || parcelCustomerName
+                    ? `Parcel Order · ${parcelCustomerName}`
+                    : 'Bill Summary'}
               </Typography>
 
               {orderItems.length === 0 ? (
@@ -748,7 +878,7 @@ const Billing = () => {
                 </Box>
                 {calculateParcelCharge() > 0 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography>Take-away parcel ({getTakeawayQuantity()} × ₹{PARCEL_CHARGE}):</Typography>
+                    <Typography>Delivery fee · {getParcelFeeLabel(getTakeawayQuantity())}</Typography>
                     <Typography sx={{ fontWeight: 600 }}>₹{calculateParcelCharge().toFixed(2)}</Typography>
                   </Box>
                 )}
@@ -772,9 +902,11 @@ const Billing = () => {
                 sx={{ bgcolor: '#6f4e37', py: 1.5, borderRadius: '10px' }}
                 disabled={selectedTableNumber != null
                   ? (selectedItems.length > 0 ? sendingToKitchen : !activeTableOrder)
+                  : (activeParcelOrder || parcelCustomerName)
+                    ? (selectedItems.length > 0 ? sendingToKitchen : !activeParcelOrder)
                   : selectedItems.length === 0}
                 onClick={() => {
-                  if (selectedTableNumber != null && selectedItems.length > 0) handleSendToKitchen();
+                  if ((selectedTableNumber != null || activeParcelOrder || parcelCustomerName) && selectedItems.length > 0) handleSendToKitchen();
                   else setOpenDialog(true);
                 }}
               >
@@ -782,7 +914,11 @@ const Billing = () => {
                   ? selectedItems.length > 0
                     ? (sendingToKitchen ? 'Sending to kitchen…' : 'Send to kitchen')
                     : 'Take payment'
-                  : 'Complete Billing'}
+                  : (activeParcelOrder || parcelCustomerName)
+                    ? selectedItems.length > 0
+                      ? (sendingToKitchen ? 'Sending parcel to kitchen…' : 'Send parcel to kitchen')
+                      : 'Take parcel payment'
+                    : 'Complete Billing'}
               </Button>
             </CardContent>
           </Card>
@@ -804,8 +940,14 @@ const Billing = () => {
             onChange={(event, value) => value && setSelectedServiceType(value)}
             sx={{ mt: 1 }}
           >
-            <ToggleButton value="dine-in">Dine in</ToggleButton>
-            <ToggleButton value="take-away">Take away (+₹{PARCEL_CHARGE})</ToggleButton>
+            {activeParcelOrder || parcelCustomerName ? (
+              <ToggleButton value="take-away" disabled>Parcel · Take away</ToggleButton>
+            ) : (
+              <>
+                <ToggleButton value="dine-in">Dine in</ToggleButton>
+                <ToggleButton value="take-away">Take away</ToggleButton>
+              </>
+            )}
           </ToggleButtonGroup>
           <Box sx={{ display: 'flex', gap: 1.5, mt: 3 }}>
             <Button fullWidth variant="outlined" onClick={() => setServiceTypeDialogOpen(false)}>
@@ -822,6 +964,53 @@ const Billing = () => {
               sx={{ bgcolor: '#6f4e37' }}
             >
               Add item
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={parcelNameDialogOpen}
+        onClose={() => {
+          setParcelNameDialogOpen(false);
+          if (!activeParcelOrder) setParcelCustomerName('');
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>New parcel order</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Enter the customer name. Every item in this order will be marked take away.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            required
+            label="Customer name"
+            value={parcelCustomerName}
+            onChange={(event) => setParcelCustomerName(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') startParcelOrder(); }}
+            inputProps={{ maxLength: 120 }}
+          />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Delivery fee: {getParcelFeeLabel(getTakeawayQuantity())} · updates with parcel quantity
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 3 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => {
+                setParcelNameDialogOpen(false);
+                if (!activeParcelOrder) setParcelCustomerName('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button fullWidth variant="contained" onClick={startParcelOrder} disabled={!parcelCustomerName.trim()} sx={{ bgcolor: '#68462f' }}>
+              Start parcel order
             </Button>
           </Box>
         </DialogContent>
