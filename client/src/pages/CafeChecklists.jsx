@@ -49,6 +49,13 @@ const getChecklistDate = (cadence) => {
   return getLocalDate(date);
 };
 
+const normalizeChecklistDate = (value, cadence) => {
+  if (cadence !== 'weekly') return value;
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return getLocalDate(date);
+};
+
 const csvCell = (value) => {
   let text = String(value ?? '');
   if (/^[=+\-@]/.test(text)) text = `'${text}`;
@@ -58,7 +65,7 @@ const csvCell = (value) => {
 const CafeChecklists = () => {
   const { user } = useSelector((state) => state.auth);
   const [cadence, setCadence] = useState('daily');
-  const checklistDate = useMemo(() => getChecklistDate(cadence), [cadence]);
+  const [checklistDate, setChecklistDate] = useState(() => getChecklistDate('daily'));
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingTask, setSavingTask] = useState('');
@@ -93,12 +100,57 @@ const CafeChecklists = () => {
         taskId: task.id,
         date: checklistDate,
         completed: !task.completed,
+        quantity: task.quantity === '' || task.quantity == null ? null : Number(task.quantity),
+        quantityUnit: task.quantityUnit || '',
       });
       setTasks((current) => current.map((item) => (
         item.id === task.id ? { ...item, completed: !task.completed } : item
       )));
     } catch (requestError) {
       setError(requestError.response?.data?.error || 'Could not update checklist item.');
+    } finally {
+      setSavingTask('');
+    }
+  };
+
+  const changeCadence = (nextCadence) => {
+    setCadence(nextCadence);
+    setChecklistDate(getChecklistDate(nextCadence));
+  };
+
+  const changeChecklistDate = (value) => {
+    setChecklistDate(normalizeChecklistDate(value, cadence));
+  };
+
+  const changeStockField = (taskId, field, value) => {
+    setTasks((current) => current.map((task) => (
+      task.id === taskId ? { ...task, [field]: value } : task
+    )));
+  };
+
+  const saveStock = async (task) => {
+    const quantity = task.quantity === '' || task.quantity == null ? null : Number(task.quantity);
+    if (quantity !== null && (!Number.isFinite(quantity) || quantity < 0)) {
+      setError('Stock quantity must be a non-negative number.');
+      return;
+    }
+    setSavingTask(task.id);
+    setError('');
+    try {
+      const response = await API.post('/checklists', {
+        taskId: task.id,
+        date: checklistDate,
+        completed: task.completed,
+        quantity,
+        quantityUnit: task.quantityUnit || '',
+      });
+      setTasks((current) => current.map((item) => (
+        item.id === task.id
+          ? { ...item, quantity: response.data.quantity, quantityUnit: response.data.quantity_unit || '' }
+          : item
+      )));
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || 'Could not save stock quantity.');
     } finally {
       setSavingTask('');
     }
@@ -136,8 +188,8 @@ const CafeChecklists = () => {
 
   const downloadChecklist = () => {
     const rows = [
-      ['Cadence', 'Period starting', 'Category', 'Ingredient / item', 'Menu use / notes', 'Stock / quantity', 'Complete'],
-      ...tasks.map((task) => [cadence, checklistDate, task.category, task.title, task.notes || '', '', task.completed ? 'Yes' : 'No']),
+      ['Cadence', 'Checklist date', 'Category', 'Ingredient / item', 'Menu use / notes', 'On-hand quantity', 'Unit', 'Complete'],
+      ...tasks.map((task) => [cadence, checklistDate, task.category, task.title, task.notes || '', task.quantity ?? '', task.quantityUnit || '', task.completed ? 'Yes' : 'No']),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -179,6 +231,8 @@ const CafeChecklists = () => {
           .cafe-checklist-print .MuiListItemText-primary { font-size: 10pt !important; }
           .cafe-checklist-print .MuiListItemText-secondary { font-size: 8pt !important; color: #444 !important; }
           .cafe-checklist-print .MuiCheckbox-root { color: #222 !important; padding: 4px !important; }
+          .cafe-checklist-stock-input { display: none !important; }
+          .cafe-checklist-print-stock { display: block !important; }
         }
       `}</style>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 2, flexWrap: 'wrap', mb: 2 }}>
@@ -190,7 +244,7 @@ const CafeChecklists = () => {
               Checklists
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {cadence === 'daily' ? `Today · ${checklistDate}` : `Week starting · ${checklistDate}`}
+              {cadence === 'daily' ? `Daily stock and task record · ${checklistDate}` : `Week starting · ${checklistDate}`}
             </Typography>
           </Box>
         </Box>
@@ -207,12 +261,24 @@ const CafeChecklists = () => {
       <Tabs
         className="cafe-checklist-no-print"
         value={cadence}
-        onChange={(event, value) => setCadence(value)}
+        onChange={(event, value) => changeCadence(value)}
         sx={{ borderBottom: '1px solid #e8e0d8', mb: 2, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 } }}
       >
         <Tab value="daily" label="Daily" />
         <Tab value="weekly" label="Weekly" />
       </Tabs>
+
+      <TextField
+        className="cafe-checklist-no-print"
+        size="small"
+        type="date"
+        label={cadence === 'daily' ? 'Checklist date' : 'Week starting'}
+        value={checklistDate}
+        onChange={(event) => changeChecklistDate(event.target.value)}
+        InputLabelProps={{ shrink: true }}
+        inputProps={{ max: getLocalDate(new Date()) }}
+        sx={{ mb: 2, minWidth: 210 }}
+      />
 
       <Box className="cafe-checklist-no-print" sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <LinearProgress variant="determinate" value={progress} sx={{ flex: 1, height: 8, borderRadius: 4 }} />
@@ -264,25 +330,55 @@ const CafeChecklists = () => {
                   <ListItem
                     key={task.id}
                     disablePadding
-                    secondaryAction={(
-                      <Tooltip title="Remove checklist item">
-                        <IconButton edge="end" size="small" aria-label={`Remove ${task.title}`} onClick={() => removeTask(task)}>
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    sx={{ borderBottom: '1px solid #eee7df', pr: 6 }}
+                    sx={{ borderBottom: '1px solid #eee7df', gap: 1, alignItems: 'center' }}
                   >
-                    <ListItemButton onClick={() => toggleTask(task)} disabled={savingTask === task.id} dense>
+                    <ListItemButton onClick={() => toggleTask(task)} disabled={savingTask === task.id} dense sx={{ flex: 1, minWidth: 0 }}>
                       <ListItemIcon sx={{ minWidth: 42 }}>
                         <Checkbox edge="start" checked={task.completed} tabIndex={-1} disableRipple />
                       </ListItemIcon>
                       <ListItemText
                         primary={task.title}
-                        secondary={task.notes || undefined}
+                        secondary={[
+                          task.notes,
+                          task.quantity !== null && task.quantity !== undefined && task.quantity !== ''
+                            ? `On hand: ${task.quantity}${task.quantityUnit ? ` ${task.quantityUnit}` : ''}`
+                            : '',
+                        ].filter(Boolean).join(' · ') || undefined}
                         primaryTypographyProps={{ sx: { textDecoration: task.completed ? 'line-through' : 'none', color: task.completed ? 'text.secondary' : 'text.primary' } }}
                       />
                     </ListItemButton>
+                    <Typography className="cafe-checklist-print-stock" variant="caption" sx={{ display: 'none', minWidth: 145, px: 1 }}>
+                      Count: __________________
+                    </Typography>
+                    <Stack className="cafe-checklist-stock-input cafe-checklist-no-print" direction="row" spacing={0.5} sx={{ alignItems: 'center', pr: 1 }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Qty"
+                        value={task.quantity ?? ''}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => changeStockField(task.id, 'quantity', event.target.value)}
+                        onBlur={() => saveStock(task)}
+                        inputProps={{ min: 0, step: '0.001', 'aria-label': `${task.title} quantity` }}
+                        sx={{ width: 92 }}
+                      />
+                      <TextField
+                        size="small"
+                        label="Unit"
+                        placeholder="kg, pcs"
+                        value={task.quantityUnit || ''}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => changeStockField(task.id, 'quantityUnit', event.target.value)}
+                        onBlur={() => saveStock(task)}
+                        inputProps={{ maxLength: 24, 'aria-label': `${task.title} unit` }}
+                        sx={{ width: 100 }}
+                      />
+                    </Stack>
+                    <Tooltip title="Remove checklist item" className="cafe-checklist-no-print">
+                      <IconButton size="small" aria-label={`Remove ${task.title}`} onClick={() => removeTask(task)}>
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </ListItem>
                 ))}
               </List>

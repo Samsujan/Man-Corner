@@ -24,7 +24,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const [{ data: tasks, error: taskError }, { data: checks, error: checkError }] = await Promise.all([
       supabase.from('mc_checklist_tasks').select('id, title, category, cadence, sort_order, notes')
         .eq('cadence', cadence).eq('active', true).order('sort_order').order('title'),
-      supabase.from('mc_checklist_checks').select('task_id, completed, completed_at')
+      supabase.from('mc_checklist_checks').select('task_id, completed, completed_at, quantity, quantity_unit')
         .eq('checklist_date', date)
     ]);
     if (taskError) throw taskError;
@@ -33,7 +33,9 @@ router.get('/', authMiddleware, async (req, res) => {
     res.json(tasks.map(task => ({
       ...task,
       completed: checksByTask.get(task.id)?.completed || false,
-      completedAt: checksByTask.get(task.id)?.completed_at || null
+      completedAt: checksByTask.get(task.id)?.completed_at || null,
+      quantity: checksByTask.get(task.id)?.quantity ?? null,
+      quantityUnit: checksByTask.get(task.id)?.quantity_unit || ''
     })));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -42,9 +44,11 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.post('/', authMiddleware, async (req, res) => {
   if (!requireOwner(req, res)) return;
-  const { taskId, date, completed } = req.body;
-  if (typeof taskId !== 'string' || !validDate(date) || typeof completed !== 'boolean') {
-    return res.status(400).json({ error: 'Valid task, date, and completion state are required' });
+  const { taskId, date, completed, quantity = null, quantityUnit = '' } = req.body;
+  if (typeof taskId !== 'string' || !validDate(date) || typeof completed !== 'boolean' ||
+      (quantity !== null && (!Number.isFinite(Number(quantity)) || Number(quantity) < 0)) ||
+      typeof quantityUnit !== 'string' || quantityUnit.length > 24) {
+    return res.status(400).json({ error: 'Valid task, date, completion state, and non-negative quantity are required' });
   }
 
   try {
@@ -56,6 +60,8 @@ router.post('/', authMiddleware, async (req, res) => {
       task_id: taskId,
       checklist_date: date,
       completed,
+      quantity: quantity === null || quantity === '' ? null : Number(quantity),
+      quantity_unit: quantityUnit.trim() || null,
       completed_by: completed ? req.user.id : null,
       completed_at: completed ? new Date().toISOString() : null
     }, { onConflict: 'task_id,checklist_date' }).select('*').single();
