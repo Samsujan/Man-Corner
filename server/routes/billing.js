@@ -88,7 +88,7 @@ const expandBill = (bill, usersById, menuById) => ({
   tokenDate: bill.token_date,
   createdAt: bill.created_at,
   tableNumber: bill.table_number ?? null,
-  orderType: bill.order_type || (bill.table_number ? 'table' : 'walk-in'),
+  orderType: bill.table_number ? 'table' : (bill.order_type || 'walk-in'),
   customerName: bill.customer_name || null,
   paymentMethod: bill.payment_method,
   cashReceived: bill.cash_received == null ? null : Number(bill.cash_received),
@@ -122,7 +122,7 @@ router.get('/tables', authMiddleware, async (req, res) => {
       .from('mc_bills')
       .select('*')
       .eq('status', 'Pending')
-      .in('order_type', ['table', 'parcel'])
+      .or('order_type.in.(table,parcel),table_number.not.is.null')
       .order('created_at');
     if (error) throw error;
     res.json(data.map(bill => expandBill(bill, {}, {})));
@@ -153,7 +153,8 @@ router.post('/open-orders/send', authMiddleware, async (req, res) => {
       pendingOrderId
         ? supabase.from('mc_bills').select('*').eq('id', pendingOrderId).eq('status', 'Pending').eq('order_type', orderType).maybeSingle()
         : orderType === 'table'
-          ? supabase.from('mc_bills').select('*').eq('table_number', tableNumber).eq('status', 'Pending').eq('order_type', 'table').maybeSingle()
+          ? supabase.from('mc_bills').select('*').eq('table_number', tableNumber).eq('status', 'Pending')
+            .order('created_at').limit(1).maybeSingle()
           : Promise.resolve({ data: null, error: null })
     ]);
     const { data: menuItems, error: menuError } = menuResult;
@@ -222,6 +223,69 @@ router.post('/open-orders/send', authMiddleware, async (req, res) => {
   }
 });
 
+router.put('/:id/items', authMiddleware, async (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items) || items.length === 0 || items.some(item => !item ||
+      typeof item.menuItemId !== 'string' || !['dine-in', 'take-away'].includes(item.serviceType) ||
+      !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 0 || Number(item.quantity) > 99)) {
+    return res.status(400).json({ error: 'Provide valid item quantities (0 removes an item)' });
+  }
+  try {
+    const { data: pending, error: pendingError } = await supabase.from('mc_bills')
+      .select('*').eq('id', req.params.id).eq('status', 'Pending').maybeSingle();
+    if (pendingError) throw pendingError;
+    if (!pending) return res.status(409).json({ error: 'This order is already paid, cancelled or no longer open.' });
+
+    const requested = new Map(items.map(item => [`${item.menuItemId}|${item.serviceType}`, Number(item.quantity)]));
+    const foodItems = [];
+    for (const item of (pending.items || []).filter(line => !line.isParcelCharge)) {
+      const key = `${item.menuItem}|${item.serviceType || 'dine-in'}`;
+      const quantity = requested.has(key) ? requested.get(key) : Number(item.quantity);
+      if (quantity < 1) continue;
+      const price = Number(item.price);
+      const gstRate = Number(item.gstRate);
+      const totalAmount = Number((price * quantity).toFixed(2));
+      foodItems.push({
+        ...item,
+        quantity,
+        totalAmount,
+        gstAmount: Number((totalAmount * gstRate / (100 + gstRate)).toFixed(2))
+      });
+    }
+
+    if (foodItems.length === 0) {
+      const { data, error } = await supabase.from('mc_bills').update({ status: 'Cancelled' })
+        .eq('id', pending.id).eq('status', 'Pending').select('*').maybeSingle();
+      if (error) throw error;
+      return res.json({ cancelled: true, order: data ? expandBill(data, {}, {}) : null });
+    }
+    const totals = calculateBillTotals(foodItems);
+    const { data, error } = await supabase.from('mc_bills').update({
+      items: totals.items,
+      subtotal: totals.subtotal,
+      total_gst: totals.totalGST,
+      total: totals.total
+    }).eq('id', pending.id).eq('status', 'Pending').select('*').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(409).json({ error: 'This order was just paid. Refresh the open orders.' });
+    res.json({ cancelled: false, order: expandBill(data, {}, {}) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('mc_bills').update({ status: 'Cancelled' })
+      .eq('id', req.params.id).eq('status', 'Pending').select('*').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(409).json({ error: 'This order is already paid, cancelled or no longer open.' });
+    res.json({ cancelled: true, order: expandBill(data, {}, {}) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.put('/:id/complete', authMiddleware, async (req, res) => {
   try {
     const { paymentMethod = 'Cash', cashReceived } = req.body;
@@ -229,7 +293,7 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Provide a supported payment method' });
     }
     const { data: pending, error: pendingError } = await supabase.from('mc_bills')
-      .select('*').eq('id', req.params.id).eq('status', 'Pending').in('order_type', ['table', 'parcel']).maybeSingle();
+      .select('*').eq('id', req.params.id).eq('status', 'Pending').or('order_type.in.(table,parcel),table_number.not.is.null').maybeSingle();
     if (pendingError) throw pendingError;
     if (!pending) return res.status(409).json({ error: 'This order is already paid or no longer open.' });
 

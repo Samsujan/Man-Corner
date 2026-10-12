@@ -85,6 +85,12 @@ const Sidebar = ({ open, onClose }) => {
       roles: ['owner'],
     },
     {
+      label: 'Sales & Groceries',
+      icon: <AnalyticsIcon />,
+      path: '/reports',
+      roles: ['owner'],
+    },
+    {
       label: 'Profit Sharing',
       icon: <PaidIcon />,
       path: '/profit-share',

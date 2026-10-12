@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const supabase = require('../lib/supabase');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
@@ -37,6 +38,27 @@ router.get('/', authMiddleware, async (req, res) => {
     res.json(data.map(formatUser));
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/:id/password', authMiddleware, async (req, res) => {
+  if (!requireOwner(req, res)) return;
+  const { password } = req.body;
+  if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('mc_users')
+      .update({ password_hash: await bcrypt.hash(password, 12) })
+      .eq('id', req.params.id)
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'User not found' });
+    res.json({ message: 'Password reset' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 

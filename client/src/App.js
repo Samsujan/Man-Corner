@@ -15,6 +15,7 @@ import Expenses from './pages/Expenses';
 import Analytics from './pages/Analytics';
 import FoodAnalysis from './pages/FoodAnalysis';
 import CafeChecklists from './pages/CafeChecklists';
+import SalesReports from './pages/SalesReports';
 import ProfitShare from './pages/ProfitShare';
 import Users from './pages/Users';
 import MenuManagement from './pages/MenuManagement';
@@ -59,6 +60,7 @@ function App() {
           <Route path="/analytics" element={<OwnerOnly user={user}><Analytics /></OwnerOnly>} />
           <Route path="/food-analysis" element={<OwnerOnly user={user}><FoodAnalysis /></OwnerOnly>} />
           <Route path="/checklists" element={<OwnerOnly user={user}><CafeChecklists /></OwnerOnly>} />
+          <Route path="/reports" element={<OwnerOnly user={user}><SalesReports /></OwnerOnly>} />
           <Route path="/profit-share" element={<OwnerOnly user={user}><ProfitShare /></OwnerOnly>} />
           <Route path="/users" element={<OwnerOnly user={user}><Users /></OwnerOnly>} />
           <Route path="/menu" element={<OwnerOnly user={user}><MenuManagement /></OwnerOnly>} />

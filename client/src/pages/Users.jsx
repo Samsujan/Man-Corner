@@ -52,6 +52,18 @@ const Users = () => {
     }
   };
 
+  const resetPassword = async (user) => {
+    const password = window.prompt(`Enter a new password for ${user.name} (min 8 characters):`);
+    if (password === null) return;
+    setError('');
+    try {
+      await API.put(`/users/${user._id}/password`, { password });
+      alert(`Password reset for ${user.name}. Share the new password with them privately.`);
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || 'Could not reset password');
+    }
+  };
+
   const deleteUser = async (user) => {
     if (!window.confirm(`Delete the account for ${user.name}?`)) return;
     setError('');
@@ -116,6 +128,9 @@ const Users = () => {
                       disabled={user._id === currentUser?.id && user.role === 'owner'}
                     >
                       {user.role === 'owner' ? 'Make guest' : 'Make owner'}
+                    </Button>
+                    <Button size="small" onClick={() => resetPassword(user)}>
+                      Reset password
                     </Button>
                     <Button
                       size="small"

@@ -470,6 +470,66 @@ const Billing = () => {
     }
   };
 
+  const clearActiveOrder = () => {
+    setSelectedTableNumber(null);
+    setActiveTableOrder(null);
+    setActiveParcelOrder(null);
+    setSelectedParcelOrderId('');
+    setParcelCustomerName('');
+    setSentItems([]);
+    setSelectedItems([]);
+  };
+
+  const applyOrderChange = (data) => {
+    if (data.cancelled) {
+      const cancelledId = data.order?._id || activeOrder?._id;
+      setTableOrders((current) => current.filter((item) => item._id !== cancelledId));
+      clearActiveOrder();
+      return;
+    }
+    const { order } = data;
+    if (order.orderType === 'parcel') setActiveParcelOrder(order);
+    else setActiveTableOrder(order);
+    setSentItems((order.items || []).filter((item) => !item.isParcelCharge).map((item) => ({
+      ...item,
+      menuItem: {
+        _id: item.menuItem || item.id,
+        name: item.name,
+        price: Number(item.price),
+        gstRate: Number(item.gstRate),
+      },
+      serviceType: item.serviceType || 'dine-in',
+    })));
+    setTableOrders((current) => current.map((item) => (item._id === order._id ? order : item)));
+  };
+
+  const changeSentQuantity = async (item, quantity) => {
+    if (!activeOrder) return;
+    if (quantity < 1 && !window.confirm(`Cancel ${item.menuItem.name} from this order?`)) return;
+    try {
+      const response = await API.put(`/billing/${activeOrder._id}/items`, {
+        items: [{ menuItemId: item.menuItem._id, serviceType: item.serviceType, quantity: Math.max(quantity, 0) }],
+      });
+      applyOrderChange(response.data);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Could not update the order');
+      fetchData();
+    }
+  };
+
+  const cancelActiveOrder = async () => {
+    if (!activeOrder || !window.confirm('Cancel this entire order? It will not count as a sale.')) return;
+    try {
+      const response = await API.post(`/billing/${activeOrder._id}/cancel`);
+      applyOrderChange(response.data);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Could not cancel the order');
+      fetchData();
+    }
+  };
+
   const handleCreateBill = async () => {
     if (paymentMethod === 'Cash' && !cashIsSufficient) return;
     try {
@@ -857,6 +917,16 @@ const Billing = () => {
                                   <DeleteOutlineIcon fontSize="small" />
                                 </IconButton>
                               )}
+                              {!isDraft && activeOrder && (
+                                <>
+                                  <Button size="small" sx={{ minWidth: 28, px: 0.5 }} aria-label={`Reduce ${item.menuItem.name}`}
+                                    onClick={() => changeSentQuantity(item, item.quantity - 1)}>-1</Button>
+                                  <IconButton size="small" color="error" aria-label={`Cancel ${item.menuItem.name}`}
+                                    onClick={() => changeSentQuantity(item, 0)}>
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -920,6 +990,11 @@ const Billing = () => {
                       : 'Take parcel payment'
                     : 'Complete Billing'}
               </Button>
+              {activeOrder && (
+                <Button fullWidth color="error" variant="outlined" sx={{ mt: 1 }} onClick={cancelActiveOrder}>
+                  Cancel entire order
+                </Button>
+              )}
             </CardContent>
           </Card>
         </Grid>
